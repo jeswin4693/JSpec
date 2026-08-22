@@ -1,0 +1,22 @@
+# Normalise line endings so a file never shows as "every line changed".
+# This is the most common cause of phantom conflicts on a Windows checkout.
+* text=auto eol=lf
+
+# Windows-only scripts keep CRLF
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# Binary - never touch, never diff
+*.png  binary
+*.jpg  binary
+*.pdf  binary
+*.zip  binary
+*.vsix binary
+
+# Append-only ledgers: union merge keeps both sides instead of conflicting.
+# Applies if these are ever committed (they are gitignored by default).
+*.jsonl merge=union
+
+# Journal entries are append-only per day - same reasoning.
+memory/journal/*.md merge=union

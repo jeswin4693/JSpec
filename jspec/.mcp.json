@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "jspec": {
+      "command": "python",
+      "args": ["-m", "jspec.mcp_server"],
+      "env": {
+        "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}/../core/src",
+        "JSPEC_ROOT": "${CLAUDE_PLUGIN_ROOT}/.."
+      }
+    }
+  }
+}

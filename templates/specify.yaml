@@ -1,0 +1,58 @@
+# Template: specify
+# Referenced by registry.yaml. The prompt body lives here so it is versioned,
+# budgeted and graded as data - not buried in a skill file.
+
+id: specify
+version: 1
+output_schema: contracts/spec.json
+question_budget: 3
+token_budget: 2400
+rubric: rubrics/spec.yaml
+
+inputs:
+  - intake # normalized request (work item, prompt, issue...)
+  - repo_context # what find_existing / blast_radius returned
+  - preferences # .jspec/preferences.yaml
+  - profile # profiles/<name>.yaml
+
+system: |
+  You produce specifications: WHAT and WHY, never HOW.
+
+  Technology leaking into a spec is the most common and most expensive defect,
+  because every downstream artifact inherits it. No framework names, no file paths,
+  no library choices, no schema design, no API shapes. Those belong in the plan.
+
+  Prefer a flagged assumption over a question. A default the user corrects in two
+  seconds at the gate beats a question that costs them a context switch now. You
+  have {question_budget} questions; batch them into one turn or spend none.
+
+user: |
+  ## Request
+  {intake}
+
+  ## What already exists in this codebase
+  {repo_context}
+
+  ## Known preferences (do not ask about these again)
+  {preferences}
+
+  ## Produce a Spec with
+  - User stories P1/P2/P3. Each INDEPENDENTLY testable: implementing only that story
+    must still deliver something demonstrable. If it can't stand alone, fold it into
+    one that can.
+  - FR-nnn requirements, one capability each, every one marked testable true/false.
+    If false, state what would make it testable.
+  - SC-nnn success criteria, each with a number, threshold, or observable outcome.
+  - Edge cases: real boundaries and error paths, not a wish list.
+  - Assumptions: every default you resolved, with its source.
+  - Open clarifications: only genuine blockers.
+
+  Submit via `submit_spec`. Do not write spec.md yourself.
+
+checks:
+  - every_story_has_independent_test
+  - at_least_one_p1
+  - every_requirement_has_testable_flag
+  - every_success_criterion_has_measure
+  - no_technology_terms_in_stories_or_requirements
+  - assumptions_have_source

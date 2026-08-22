@@ -1,0 +1,109 @@
+# JSpec prompt template registry
+#
+# One entry per command. Every entry MUST declare output_schema, question_budget,
+# token_budget and rubric - those four fields are what make a template improvable
+# instead of merely editable. Polaris has templates without them, which is why it
+# could never tell whether a template change helped (DECISIONS.md D-002).
+#
+# Loaded by the router; each entry points at its own file for the prompt body.
+
+schema_version: "1.0"
+
+defaults:
+  agent: null # null = main thread; otherwise an agent in jspec/agents/
+  effort: high
+  confidence_floor: 0.6
+
+templates:
+  route:
+    file: route.yaml
+    routes: [T-0, T-1, T-2, T-3]
+    output_schema: contracts/classification.json
+    question_budget: 0
+    token_budget: 300
+    rubric: rubrics/route.yaml
+    notes: >
+      Mostly deterministic - the model only adjudicates when confidence < 0.6.
+      A router that costs real tokens defeats its own purpose.
+
+  specify:
+    file: specify.yaml
+    routes: [T-2, T-3]
+    output_schema: contracts/spec.json
+    question_budget: 3
+    token_budget: 2400
+    agent: null
+    critic: spec-critic
+    rubric: rubrics/spec.yaml
+
+  clarify:
+    file: clarify.yaml
+    routes: [T-2]
+    output_schema: contracts/clarifications.json
+    question_budget: 3
+    token_budget: 800
+    rubric: rubrics/clarify.yaml
+    notes: >
+      Exists because upstream Spec Kit has it and Polaris dropped it. Resolving
+      ambiguity here costs 90 seconds; resolving it after implementation costs a day.
+
+  plan:
+    file: plan.yaml
+    routes: [T-2]
+    output_schema: contracts/plan.json
+    question_budget: 1
+    token_budget: 2700
+    effort: xhigh
+    rubric: rubrics/plan.yaml
+
+  decompose:
+    file: decompose.yaml
+    routes: [T-2, T-3]
+    output_schema: contracts/work_packages.json
+    question_budget: 0
+    token_budget: 2000
+    rubric: rubrics/decompose.yaml
+    notes: Emits the dependency DAG and [P] parallel markers.
+
+  risk:
+    file: risk.yaml
+    routes: [T-1, T-2, T-3]
+    output_schema: contracts/risk_items.json
+    question_budget: 0
+    token_budget: 1600
+    rubric: rubrics/risk.yaml
+    notes: >
+      Model supplies likelihood/impact only. blast_radius, roll-up and the verdict
+      are computed in core/risk.py - never asked of the model.
+
+  fix:
+    file: fix.yaml
+    routes: [T-0, T-1]
+    output_schema: contracts/fix.json
+    question_budget: 1
+    token_budget: 2600
+    rubric: rubrics/fix.yaml
+    notes: >
+      The template Polaris budgets for but never shipped - no fix.md exists anywhere
+      under its .polaris/missions/. Most-used task type, no template.
+
+  review:
+    file: review.yaml
+    routes: [T-0, T-1, T-2, T-3]
+    output_schema: contracts/review.json
+    question_budget: 0
+    token_budget: 2200
+    effort: xhigh
+    agent: null
+    refuters: 3
+    rubric: rubrics/review.yaml
+    notes: Every finding faces 3 refuters; majority refutation kills it.
+
+  converge:
+    file: converge.yaml
+    routes: [T-2]
+    output_schema: contracts/drift.json
+    question_budget: 0
+    token_budget: 1800
+    rubric: rubrics/converge.yaml
+    notes: Shipped code vs spec. Specs rot silently; nothing else catches it.

@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+
+# JSpec runtime state (derived - rebuildable from the repo, never the source of truth)
+.jspec/index.db
+.jspec/*.sqlite*
+.jspec/cache/
+
+# Runtime ledgers are LOCAL by default. Commit them deliberately if you want the
+# audit trail in git - do not let them arrive by accident.
+.jspec/traces.jsonl
+.jspec/gates.jsonl
+
+# Secrets - never commit. JSpec needs no API key; if one appears here, something is wrong.
+.env
+*.pem
+*.key
+
+# OS / editor
+Thumbs.db
+desktop.ini
+.DS_Store
+.idea/
+*.swp

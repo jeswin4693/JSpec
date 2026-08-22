@@ -1,0 +1,8 @@
+{
+  "name": "jspec",
+  "description": "AI-native spec-driven development. Routes any development request to the right pipeline, splits big work into gated work packages, scores and rolls up risk, and keeps an audit ledger. Runs on Claude Code auth - no API key.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jeswin J"
+  }
+}
