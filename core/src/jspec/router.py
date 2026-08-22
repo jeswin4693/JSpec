@@ -65,31 +65,32 @@ TOKEN_BUDGET: dict[Route, int] = {
 # Weights are deliberately coarse. Precision here is false precision; the point is
 # to be confidently right on the easy majority and defer the rest.
 
-WORK_ITEM = re.compile(r"\b(?:ADO|AB#|JIRA|GH)[-# ]?(\d{3,})\b", re.I)
+WORK_ITEM = re.compile(r"\b(?:ADO|AB#|JIRA|GH)[-# ]?(\d{3,})\b", re.IGNORECASE)
 STACK_TRACE = re.compile(
     r"(?:^\s+at\s+\S+|Traceback \(most recent call last\)|"
     r"\w+Error:|\w+Exception:|expect\(.+\)\.to|Timeout \d+ms exceeded)",
-    re.M,
+    re.MULTILINE,
 )
 FILE_PATH = re.compile(r"\b[\w./\\-]+\.(?:py|ts|tsx|js|cs|java|go|rb|sql|ya?ml)\b")
 
 FIX_WORDS = re.compile(
     r"\b(fix|failing|fails|failed|broken|break(?:ing)?|bug|error|crash|"
     r"regress\w*|flaky|why is|not working|wrong)\b",
-    re.I,
+    re.IGNORECASE,
 )
 FEATURE_WORDS = re.compile(
-    r"\b(add|create|implement|build|new|support for|introduce|enable|design)\b", re.I
+    r"\b(add|create|implement|build|new|support for|introduce|enable|design)\b",
+    re.IGNORECASE,
 )
 SWEEP_WORDS = re.compile(
     r"\b(all|every|across|each of the|bulk|everywhere|throughout|"
     r"whole (?:repo|suite|codebase)|migrate)\b",
-    re.I,
+    re.IGNORECASE,
 )
 TRIVIAL_WORDS = re.compile(
     r"\b(rename|typo|bump|comment|log message|constant|import|"
     r"one[- ]liner|small change)\b",
-    re.I,
+    re.IGNORECASE,
 )
 
 

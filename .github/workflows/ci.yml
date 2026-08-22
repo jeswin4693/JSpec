@@ -1,0 +1,118 @@
+name: CI
+
+# Solo repo: run on pushes to main and on any PR you open against it.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# A newer push cancels an in-flight run for the same ref - no queue pile-up.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.14 is excluded deliberately - see DECISIONS.md D-013.
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ./core[dev]
+
+      - name: Lint
+        run: ruff check core tests
+
+      - name: Format check
+        run: ruff format --check core tests
+
+      - name: Test
+        run: pytest
+
+  artifacts:
+    # Config files are load-bearing: a malformed plugin manifest or template
+    # registry fails at runtime, in someone's session, with a worse error message.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install
+        run: python -m pip install pyyaml
+
+      - name: Plugin manifest and MCP config parse
+        run: |
+          python -c "
+          import json, sys
+          for p in ('jspec/.claude-plugin/plugin.json', 'jspec/.mcp.json', 'jspec/hooks/hooks.json'):
+              with open(p) as f:
+                  json.load(f)
+              print(f'ok {p}')
+          "
+
+      - name: Plugin manifest has the required fields
+        run: |
+          python -c "
+          import json, sys
+          m = json.load(open('jspec/.claude-plugin/plugin.json'))
+          missing = [k for k in ('name', 'description') if not m.get(k)]
+          sys.exit(f'plugin.json missing: {missing}') if missing else print('ok', m['name'])
+          "
+
+      - name: Template registry parses and every template declares its contract
+        run: |
+          python -c "
+          import sys, yaml
+          reg = yaml.safe_load(open('templates/registry.yaml'))
+          required = ('output_schema', 'question_budget', 'token_budget', 'rubric')
+          bad = {
+              name: [k for k in required if k not in body]
+              for name, body in reg['templates'].items()
+              if any(k not in body for k in required)
+          }
+          sys.exit(f'templates missing contract fields: {bad}') if bad else print(f\"ok {len(reg['templates'])} templates\")
+          "
+
+      - name: Skills declare a description, and step skills stay model-locked
+        run: |
+          python -c "
+          import pathlib, sys
+          errs = []
+          for p in pathlib.Path('jspec/skills').glob('*/SKILL.md'):
+              head = p.read_text(encoding='utf-8').split('---')[1]
+              if 'description:' not in head:
+                  errs.append(f'{p}: no description')
+              # Only the router may be model-invoked; a step skill that self-triggers
+              # can skip the spec entirely.
+              if p.parent.name != 'router' and 'disable-model-invocation: true' not in head:
+                  errs.append(f'{p}: step skill must set disable-model-invocation')
+          sys.exit(chr(10).join(errs)) if errs else print('ok skills')
+          "
+
+      - name: No API key may be required on any default path
+        run: |
+          ! grep -rn --include=*.py --include=*.yaml --include=*.json \
+              -e 'ANTHROPIC_API_KEY *=' -e '\-\-bare' core jspec templates \
+            || (echo 'API key or --bare found; see DECISIONS.md D-006' && exit 1)

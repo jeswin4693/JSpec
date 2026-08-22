@@ -65,7 +65,9 @@ def main() -> int:
     if decisions.is_file():
         ids = [
             line.split("·")[0].replace("##", "").strip()
-            for line in decisions.read_text(encoding="utf-8", errors="replace").splitlines()
+            for line in decisions.read_text(
+                encoding="utf-8", errors="replace"
+            ).splitlines()
             if line.startswith("## D-")
         ]
         if ids:

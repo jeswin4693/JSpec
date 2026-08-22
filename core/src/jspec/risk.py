@@ -33,7 +33,9 @@ class Verdict:
     needs_review: bool
 
 
-def item_score(likelihood: int, impact: int, reversibility: int, detectability: int) -> float:
+def item_score(
+    likelihood: int, impact: int, reversibility: int, detectability: int
+) -> float:
     """Single risk item. All inputs 1-5.
 
     Reversibility and detectability are multipliers, not addends: an irreversible
