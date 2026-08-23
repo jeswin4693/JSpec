@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "_comment": "Task state, per master plan §55. The system must be resumable from this file alone. Cross-SESSION memory is a different thing and lives in memory/STATE.md (D-015); this is cross-STEP task state within one piece of work.",
+
+  "task_id": null,
+  "phase": "0",
+  "phase_name": "bootstrap",
+  "status": "in_progress",
+  "specification": null,
+  "route": null,
+  "attempt": 1,
+  "repair_attempts": 0,
+  "updated": "2026-08-23",
+
+  "chain": [],
+  "completed_steps": [],
+  "skipped_steps": [],
+  "pending_approval": null,
+
+  "artifacts": {
+    "spec": null,
+    "plan": null,
+    "work_packages": [],
+    "risk_verdict": null,
+    "review": null
+  },
+
+  "history": [
+    {
+      "phase": "0",
+      "event": "bootstrap_started",
+      "date": "2026-08-23",
+      "note": "Master plan adopted and reconciled with the existing JSpec design (D-016..D-021). Pre-existing project detected: 1054 lines of Python, 2 commits, green CI on 3.12/3.13 - preserved per §66.4."
+    }
+  ]
+}

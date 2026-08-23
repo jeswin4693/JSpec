@@ -1,0 +1,183 @@
+# JSpec / AI_SDD configuration
+#
+# Required by master plan §58 and §26 ("do not hardcode these values globally -
+# make them configurable"). This file holds RUNTIME policy: providers, context
+# rules, retrieval order, repair limits, security.
+#
+# It deliberately does NOT restate per-template token budgets - those already live
+# in templates/registry.yaml and duplicating them guarantees drift (constitution
+# rule 2). This file supplies only the target->maximum multiplier and per-operation
+# overrides that §26 asks for.
+
+schema_version: "1.0"
+
+# --- provider (§32, §33, §62 as amended by D-018) --------------------------------
+# The default path uses Claude Code auth. No backend that requires an API key may be
+# the default, and --bare is forbidden: it bypasses subscription login. CI enforces
+# both (.github/workflows/ci.yml).
+provider:
+  default: claude-code
+  forbidden_flags: ["--bare"]
+  backends:
+    claude-code:
+      auth: subscription
+      requires_key: false
+      available: true
+      notes: In-session. Structured output via MCP tool schemas.
+    claude-headless:
+      auth: subscription
+      requires_key: false
+      available: true
+      command: claude -p --output-format json --json-schema
+      notes: For CI and evals. Returns structured_output + total_cost_usd.
+    anthropic-api:
+      auth: api_key
+      requires_key: true
+      available: false
+      notes: Available to teams holding a key. Unlocks prompt caching and Batch API.
+    other:
+      auth: api_key
+      requires_key: true
+      available: false
+      notes: OpenAI / Gemini / local. Behind the same adapter interface (§62).
+
+# Cost-tier model routing (§33) needs per-model API access, so it is available only
+# on key-based backends. On claude-code the equivalent lever is route depth.
+model_routing:
+  enabled: false
+  reason: requires a key-based backend; use route depth (T-0..T-3) instead
+
+# --- token budgeting (§26, §27) --------------------------------------------------
+tokens:
+  # Per-template targets live in templates/registry.yaml. Maximum = target * this,
+  # unless overridden below. 2.2 matches observed Polaris ratios (2400/5100, 2600/6000).
+  max_multiplier: 2.2
+  overrides:
+    analysis: { target: 4000, maximum: 8000 }
+    planning: { target: 8000, maximum: 16000 }
+  accounting:
+    enabled: true
+    ledger: .sdd/metrics/tokens.jsonl
+    track:
+      [input, output, cached, context, model, provider, task, latency, estimated_cost]
+
+# --- context engineering (§22-25) ------------------------------------------------
+context:
+  # §23. Start at the symbol; climb only when the current rung is insufficient.
+  expansion_ladder:
+    - symbol
+    - enclosing_class
+    - related_symbols
+    - dependencies
+    - file_range
+    - full_file
+  full_file_requires_justification: true
+  never_whole_repository: true
+
+  # §24. Explicit user --include restrictions (§25) override PREFERRED and OPTIONAL,
+  # but never override NEVER_INCLUDE.
+  preferences:
+    ALWAYS_INCLUDE:
+      - specs/**
+      - .sdd/constitution.md
+      - memory/STATE.md
+    PREFERRED:
+      - core/src/**
+      - tests/**
+      - templates/**
+      - jspec/**
+    OPTIONAL:
+      - docs/**
+      - memory/journal/**
+      - README.md
+    NEVER_INCLUDE:
+      - .git/**
+      - .venv/**
+      - "**/__pycache__/**"
+      - .pytest_cache/**
+      - .ruff_cache/**
+      - node_modules/**
+      - .sdd/cache/**
+
+# --- security (§46) --------------------------------------------------------------
+# Nothing matching these leaves the machine, regardless of retrieval scoring or an
+# explicit --include. Redaction runs before any context is assembled.
+security:
+  never_send:
+    - .env*
+    - "**/credentials*"
+    - "**/secrets/**"
+    - "*.pem"
+    - "*.key"
+    - "*.pfx"
+    - "*.p12"
+    # The Made2Manage-Automation repo keeps live WebAPI secrets here. It is
+    # git-excluded there; it must also be retrieval-excluded here.
+    - .claude/api.md
+  secret_detection: true
+  redact_on_match: true
+  fail_closed: true # a detector error blocks the send; it never falls through
+
+# --- retrieval (§20, §21) --------------------------------------------------------
+# Cheap methods first. Semantic retrieval is not the first tool for every task.
+retrieval:
+  order: [exact, symbol, lexical, structural, semantic, hybrid_rank]
+  ranking_signals:
+    [
+      exact_match,
+      symbol_similarity,
+      lexical_relevance,
+      semantic_similarity,
+      dependency_relationship,
+      file_category,
+      historical_relevance,
+      task_relationship,
+    ]
+  # §12: relevance never comes from file size, recency, or churn alone.
+  forbidden_ranking_signals: [file_size, file_recency, modification_frequency]
+
+# --- indexing (§15, §48) ---------------------------------------------------------
+index:
+  root: .sdd/index
+  incremental: true
+  hash_algorithm: sha256
+  reindex_on: content_hash_change
+  languages: [python, typescript, javascript, tsx, jsx]
+
+cache:
+  root: .sdd/cache
+  invalidate_on: [content_hash, dependency_change]
+  caches: [summaries, retrieval, ai, ast, symbols, embeddings, test_results]
+
+# --- repair (§41, §42) -----------------------------------------------------------
+repair:
+  max_attempts: 3
+  on_exhaustion: HUMAN_REVIEW_REQUIRED
+  resend_full_context: false # §41: retrieve failure-specific context only
+
+# --- risk and gates (D-004, D-005; §50, §56) -------------------------------------
+risk:
+  lambda_tail: 0.15
+  w_descendants: 0.10
+  w_correlation: 0.20
+  bands:
+    low: { max_score: 3.0, gate: auto_approve_and_log }
+    medium: { max_score: 6.0, gate: evidence_then_one_yes }
+    high: { max_score: null, gate: named_human_impact_scan_rollback_plan }
+  ledger: .sdd/gates.jsonl # append-only
+
+# --- routing (D-009, D-010) ------------------------------------------------------
+routing:
+  confidence_floor: 0.6
+  # Depths, chains, question and token budgets are defined in core/src/jspec/router.py
+  # and must not be restated here (constitution rule 2).
+
+# --- validation (§40) ------------------------------------------------------------
+# Project-native commands only. §40: do not invent commands without checking the repo.
+validation:
+  python:
+    typecheck: null # none configured yet
+    lint: ruff check core tests
+    format: ruff format --check core tests
+    test: pytest
+  # Per-domain runners belong in profiles/*.yaml, not here (constitution rule 20).

@@ -44,8 +44,13 @@ this project — JSpec is Python + a Claude Code plugin, not Playwright specs.
 
 What carries over here, because it is good practice and the owner relies on it:
 
-- **Approval gate.** Ask Yes/No before creating, editing, or deleting files.
-  Silence is not approval. A prior session's Yes never carries forward.
+- **Act, don't poll.** Do NOT ask Yes/No before each file write. The owner's
+  standing instruction (2026-08-23): *"Always don't ask Yes or No questions. Just
+  do, and if any clarification is needed really, ask me."* Execute the work; ask
+  only when a genuine ambiguity would make the output wrong, and then ask a real
+  question, not a permission request. **Still confirm first** for: destructive or
+  irreversible operations, anything leaving the machine, and high-risk shared
+  changes (constitution rule 9).
 - **Files are truth.** Never answer from memory about this codebase. Read it.
 - **No blind changes.** Scan for callers/importers before changing a shared thing.
 - **Reuse before adding.** Search before writing a new helper. Duplicated logic
@@ -90,7 +95,9 @@ Memory       memory/                           → this folder
 
 | Path | Holds |
 |---|---|
-| `memory/` | session memory — read at start, written at end |
+| `memory/` | **session** memory — read at start, written at end |
+| `.sdd/` | **runtime** config + **task** state: `constitution.md`, `config.yaml`, `state.json`, `index/`, `cache/`, `knowledge/`, `traces/`, `metrics/`, `gates.jsonl` |
+| `docs/` | the master plan + its auto-loaded digest |
 | `jspec/` | the Claude Code plugin (skills, agents, hooks, `.mcp.json`) |
 | `core/` | Python: contracts, MCP server, router, risk engine |
 | `templates/` | prompt template registry — one per command, with budgets |
@@ -98,11 +105,34 @@ Memory       memory/                           → this folder
 | `specs/` | generated artifacts |
 | `evals/` | golden set + rubrics — the only proof quality is improving |
 
-## 5. Build order (never skip step 4)
+Do not confuse the two memories: `memory/` carries continuity **across chats**;
+`.sdd/state.json` carries resumability **across steps of one task** (§55).
 
-1. contracts → 2. MCP server → 3. one skill end-to-end → **4. evals** →
-5. critics → 6. retrieval → 7. plan/decompose → 8. risk + gates →
-9. implement/review → 10. profiles → 11. VS Code extension (last).
+## 5. Build order — merged phases (never skip 4.5)
 
-Building agents 5–11 before the eval harness exists is how a spec framework
-becomes markdown nobody can prove works. Current position: see `memory/STATE.md`.
+```
+0 bootstrap → 1 repo intelligence → 2 specification → 3 retrieval
+→ 4 context engineering → 4.5 EVALS → 5 experience → 6 AI gateway
+→ 7 planning → 8 generation → 9 validation → 10 repair
+→ 11 traceability → 12 knowledge capture
+```
+
+Running alongside every phase, from the original JSpec design: route depth T-0…T-3
+and step skipping · risk roll-up to one verdict + three drivers · the append-only
+gate ledger · question budgets · domain profiles · session memory.
+
+Building phases 5–12 before the eval harness exists is how a spec framework becomes
+markdown nobody can prove works. Each phase ships implementation, tests, docs,
+validation and an example; report per §67 and stop. Current position:
+`memory/STATE.md` and `.sdd/state.json`.
+
+## 6. Governing specification
+
+The build specification for this project is `docs/AI_SDD_MASTER_PLAN.md` (70
+sections), reconciled with the pre-existing design by `memory/DECISIONS.md`
+D-016…D-021. The full document is **load-on-demand** — read the section you need,
+never the whole file (it is ~12k tokens, and its own §60 forbids that).
+
+The binding rules are imported below and are therefore active in every session:
+
+@docs/MASTER-PLAN-DIGEST.md

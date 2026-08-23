@@ -50,17 +50,36 @@ claude --plugin-dir ./jspec        # load it
 | Path | Holds |
 |---|---|
 | `memory/` | cross-session memory — `STATE.md`, `DECISIONS.md`, `journal/` |
+| `.sdd/` | runtime config + task state — constitution, config, index, cache, ledger |
+| `docs/` | the governing build specification and its auto-loaded digest |
 | `jspec/` | the plugin: skills, agents, hooks, `.mcp.json` |
 | `core/` | Python: contracts, router, risk engine, MCP server |
 | `templates/` | prompt registry — every template declares schema, budgets, rubric |
 | `profiles/` | per-domain config; a new domain is a YAML file, not a code change |
 | `evals/` | golden set + rubrics — the only proof quality is improving |
 
+## Build phases
+
+```
+0 bootstrap → 1 repo intelligence → 2 specification → 3 retrieval
+→ 4 context engineering → 4.5 EVALS → 5 experience → 6 AI gateway
+→ 7 planning → 8 generation → 9 validation → 10 repair
+→ 11 traceability → 12 knowledge capture
+```
+
+Routing, risk roll-up, gates, question budgets and profiles run alongside every phase.
+Phase 4.5 exists because a system that can't measure its own output quality can only
+claim to be improving. Nothing past it proceeds unproven.
+
 ## Status
 
-**Build step 1 of 11.** Contracts and the router are real; the MCP server and risk
-engine are stubs with settled signatures. See `memory/STATE.md` for exactly where
-things stand and what's next.
+**Phase 0 — bootstrap.** Contracts (Spec side) and the router are real and tested;
+the MCP server and risk engine are stubs with settled signatures; repository
+intelligence, retrieval and context engineering are not started.
+
+The governing specification is `docs/AI_SDD_MASTER_PLAN.md`, reconciled with the
+original design in `memory/DECISIONS.md` D-016…D-022. See `memory/STATE.md` for
+exactly where things stand and what's next.
 
 Read `CLAUDE.md` first — it defines the session memory protocol that lets a new chat
 continue where the last one stopped.

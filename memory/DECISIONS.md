@@ -188,3 +188,125 @@ not depend on anyone remembering to look.
 
 **Consequence:** A session isn't finished until a new chat tomorrow could continue
 from what's on disk.
+
+## D-016 · 2026-08-23 · The Master Plan is the governing build specification
+
+**Decision:** `docs/AI_SDD_MASTER_PLAN.md` (70 sections, supplied by the owner
+2026-08-23) becomes the governing build specification for this repository, reconciled
+with D-001…D-015 rather than replacing them. Where the two disagree, D-017…D-021
+settle it. Where they agree — which is roughly 60% of the document — the existing
+design already implements it.
+
+**Why:** The document is a stronger articulation of the retrieval, context and
+experience layers than JSpec had; JSpec is a stronger articulation of measurement and
+governance than the document has. Neither is a superset. Adopting one wholesale would
+have discarded real work.
+
+**Consequence:** Phase order and vocabulary follow the master plan. Determinism,
+typed artifacts, no-API-key, risk roll-up, gates and session memory follow JSpec.
+The full document is load-on-demand; `docs/MASTER-PLAN-DIGEST.md` is auto-imported.
+
+## D-017 · 2026-08-23 · Core stays Python — §5's TypeScript baseline is amended
+
+**Decision:** The core remains Python 3.12/3.13. Master plan §5 (TypeScript / Node /
+npm) is amended, not followed. D-013 stands.
+
+**Why:** 1,054 lines of tested Python already exist with green CI on 3.12 and 3.13.
+The strongest argument for TypeScript was that the primary target repo
+(Made2Manage-Automation) is TypeScript — but `tree-sitter-language-pack` parses TS and
+TSX perfectly well, so analysing TypeScript does not require writing the tool in
+TypeScript. `ts-morph`'s genuine advantage is *type-aware* semantic analysis, which is
+narrow enough to buy later as an optional sidecar rather than by rewriting the core.
+
+**Consequence:** No rewrite. The CLI is `python -m jspec` / plugin `bin/`, not
+`npm i -g sdd`. If type-aware analysis proves necessary at Phase 1, a ts-morph sidecar
+is added behind a tool interface — that would be a new decision, not a reversal.
+
+## D-018 · 2026-08-23 · AI Gateway: adapters required, key-based default forbidden
+
+**Decision:** Master plan §32/§33/§62 are satisfied by the D-006 judge port. Provider
+independence is required and already designed. What is amended is the *default*: the
+default backend is `claude-code` (in-session) and `claude-headless` (CI). No default
+path may require `ANTHROPIC_API_KEY` or any other provider key. `--bare` stays
+forbidden. §33's cost-tier model routing is available only on key-based backends and
+is disabled by default in `.sdd/config.yaml`.
+
+**Why:** The owner has Claude Code Enterprise and confirmed on 2026-08-23 that no AI
+API key is available — only Claude Code integration. §32 as written (ClaudeProvider /
+OpenAIProvider / GeminiProvider) cannot run on this machine. But §62's actual
+requirement is that provider specifics live behind adapters, which D-006 already does.
+
+**Consequence:** The architecture the document asks for is preserved; only the default
+changes. On `claude-code`, the lever for spending less is route depth (T-0…T-3) and
+step skipping, not model downgrade. CI enforces the no-key rule.
+
+## D-019 · 2026-08-23 · Map the §8 layout onto the existing tree; do not rename
+
+**Decision:** Keep `memory/ jspec/ core/ templates/ profiles/ specs/ evals/`. Add
+`.sdd/` for what §8 asks for that genuinely did not exist: `constitution.md`,
+`config.yaml`, `state.json`, `index/`, `cache/`, `knowledge/`, `traces/`, `metrics/`,
+`gates.jsonl`. Add `docs/`. `src/*` subsystem names map onto `core/src/jspec/` modules.
+
+**Why:** Most of §8 already had a home under a different name. Renaming would break
+`.mcp.json`, `hooks/hooks.json`, `pytest.ini`'s pythonpath and the CI paths, for zero
+capability gained.
+
+**Consequence:** Two state files with distinct jobs, documented so they are not
+confused: `memory/STATE.md` is cross-session memory (D-015); `.sdd/state.json` is
+cross-step task state (§55).
+
+## D-020 · 2026-08-23 · An evaluation phase is inserted at 4.5
+
+**Decision:** Insert an eval phase between master plan Phase 4 and Phase 5. Nothing
+past it proceeds unproven.
+
+**Why:** The master plan's 13 phases contain no phase that measures whether the
+artifacts the system *produces* are improving. §68's Definition of Done — tests pass,
+types pass, docs exist — proves the code runs, not that the specifications, plans and
+patches are good. §21 asks to "track retrieval quality" and §47 asks to track
+everything, but no phase builds the thing that scores quality. This is the one place
+the document is judged wrong rather than merely different.
+
+**Consequence:** Master plan §57's phase order is amended. The blocking input is the
+golden set — real features with what got reworked and why — which only the owner can
+supply.
+
+## D-021 · 2026-08-23 · Six engines adopted from the master plan
+
+**Decision:** Adopt, as genuine additions the JSpec design lacked: (1) **Context
+Engineering** — `ContextBuilder`, `TokenBudgetManager`, `ContextCompressor`,
+`ProgressiveContextExpander`, and §23's expansion ladder; (2) **Experience Engine** —
+retrievable engineering knowledge (EXP-nnn lessons, incidents, anti-patterns) searched
+by similarity to the task; (3) **Repair Engine** — classify → failure-specific context
+→ diagnose → patch → validate, capped at 3 attempts then `HUMAN_REVIEW_REQUIRED`;
+(4) **Traceability** — requirement → spec → plan → code → test → result;
+(5) **Knowledge Capture** — results and feedback becoming candidate lessons;
+(6) **Security / redaction** — secret detection before any context leaves the machine.
+
+**Why:** Each is absent from D-001…D-015 and each is load-bearing. §3's "minimum
+*sufficient* context, not minimum context" is a sharper formulation than JSpec's token
+discipline. The Experience Engine is the RCA-Agent taxonomy returning with a proper
+spec, exactly as D-014 anticipated. Knowledge Capture is the only loop that makes the
+system compound. Security/redaction directly answers the open question about sending
+context from an `Internal`-classified repo off-machine.
+
+**Consequence:** These become Phases 4, 5, 10, 11, 12 and a cross-cutting security
+policy. `.sdd/config.yaml` already encodes the ladder, the repair limit, the context
+preferences and the never-send list.
+
+## D-022 · 2026-08-23 · Act, don't poll — the per-file approval gate is retired
+
+**Decision:** Stop asking Yes/No before each file write. Owner's standing instruction,
+2026-08-23: *"Always don't ask Yes or No questions. Just do, and if any clarification
+is needed really, ask me."* Confirmation is still required for destructive or
+irreversible operations, anything leaving the machine, and high-risk shared changes
+(constitution rule 9). Questions are for genuine ambiguity that would make the output
+wrong — not for permission.
+
+**Why:** The gate was inherited from the M2M Playwright ruleset, where a wrong edit
+breaks a live automation suite. Here it was costing a round trip per step on a
+greenfield repo with git as the safety net, and the owner said so explicitly.
+
+**Consequence:** Supersedes the approval-gate bullet in `CLAUDE.md` §1. Git history is
+now the rollback mechanism, which makes committing at phase boundaries load-bearing
+rather than optional.

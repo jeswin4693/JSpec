@@ -13,28 +13,16 @@ Keep this module free of I/O and of model calls.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Annotated
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-Id = Annotated[str, Field(min_length=3, max_length=16)]
-Evidence = Annotated[list[str], Field(min_length=1)]
-"""At least one `path:line` or quoted source. A judgement without evidence is not
-admissible (D-003)."""
+from jspec.contracts.base import AcceptanceScenario, Confidence, Evidence, Id
 
 
 class Priority(str, Enum):
     P1 = "P1"
     P2 = "P2"
     P3 = "P3"
-
-
-class AcceptanceScenario(BaseModel):
-    """Given/When/Then. Split into three fields so it can be checked, not just read."""
-
-    given: str = Field(min_length=3)
-    when: str = Field(min_length=3)
-    then: str = Field(min_length=3)
 
 
 class UserStory(BaseModel):
@@ -137,7 +125,7 @@ class Spec(BaseModel):
     assumptions: list[Assumption] = Field(default_factory=list)
     open_clarifications: list[str] = Field(default_factory=list)
 
-    confidence: float = Field(ge=0.0, le=1.0)
+    confidence: Confidence
     evidence: Evidence
 
     @model_validator(mode="after")

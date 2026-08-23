@@ -1,15 +1,21 @@
 """Risk scoring and roll-up.
 
 STATUS: STUB. Signatures and the maths are specified; bodies are not implemented.
-Build step 2. See DECISIONS.md D-004 for why these three rules and not a sum or a max.
+Implemented in **Phase 7 (planning)**, when work packages first exist to score. See
+DECISIONS.md D-004 for why these three rules and not a sum or a max.
 
 Everything in this module is arithmetic. No model calls, ever - paying a model to add
-numbers is a design error (D-003).
+numbers is a design error (D-003). The model supplies only the 1-5 inputs on each
+`RiskItem`; the verdict is computed here and never asked for.
+
+Tunable weights are duplicated as runtime policy in `.sdd/config.yaml` under `risk:`.
+The constants below are the defaults; a profile or config may override them at the
+call site, but the maths does not change.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from jspec.contracts.risk import Verdict
 
 LAMBDA_TAIL = 0.15
 """Weight on non-dominant risks. A plain max makes ten trivial risks free; a plain
@@ -25,12 +31,9 @@ systematically under-reports shared-surface exposure - decisive where shared pag
 objects and support utilities span several products."""
 
 
-@dataclass(frozen=True)
-class Verdict:
-    decision: str  # GO | GO-WITH-GATES | NO-GO
-    score: float
-    drivers: tuple[str, ...]  # the three that produced the decision
-    needs_review: bool
+# `Verdict` was a frozen dataclass here. It is a persisted artifact, so under D-002 it
+# belongs in `contracts/` and is imported above - one definition, exported as JSON
+# Schema like every other artifact.
 
 
 def item_score(

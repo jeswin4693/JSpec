@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from enum import Enum
+
+from jspec.contracts.routing import Route
 
 CONFIDENCE_FLOOR = 0.6
 """Below this, the caller asks the model to adjudicate and must state which signals
@@ -24,13 +25,9 @@ confidence is scaled down even when one route wins by a mile - a single weak sig
 is a wide margin over nothing and still tells us almost nothing."""
 
 
-class Route(str, Enum):
-    T0_TRIVIAL = "T-0"
-    T1_FIX = "T-1"
-    T2_FEATURE = "T-2"
-    T3_SWEEP = "T-3"
-
-
+# Route itself is data and lives in `jspec.contracts.routing`, imported above and
+# re-exported here so existing callers keep working. The tables below are policy and
+# stay in the router: which steps a depth runs, and what it may spend.
 CHAINS: dict[Route, tuple[str, ...]] = {
     Route.T0_TRIVIAL: ("impact", "fix", "verify"),
     Route.T1_FIX: ("reproduce", "root_cause", "impact", "fix", "regression"),
