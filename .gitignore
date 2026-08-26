@@ -19,6 +19,13 @@ build/
 .jspec/traces.jsonl
 .jspec/gates.jsonl
 
+# Chat history / session journal - LOCAL ONLY, by the owner's instruction (D-029).
+# Keep writing it every session (CLAUDE.md 0b) - it is how a new chat resumes. It is
+# just not version-controlled: it is working memory, not a project artifact.
+# NOTE: git is therefore not its backup. This folder syncs to OneDrive; that is.
+# Never `git add -f` these. Decisions worth keeping go to DECISIONS.md, which IS committed.
+memory/journal/
+
 # Secrets - never commit. JSpec needs no API key; if one appears here, something is wrong.
 .env
 *.pem

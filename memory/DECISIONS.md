@@ -310,3 +310,158 @@ greenfield repo with git as the safety net, and the owner said so explicitly.
 **Consequence:** Supersedes the approval-gate bullet in `CLAUDE.md` §1. Git history is
 now the rollback mechanism, which makes committing at phase boundaries load-bearing
 rather than optional.
+
+## D-023 · 2026-08-26 · Teach as you build; many small components, not few big phases
+
+**Decision:** Every meaningful unit of work ships in two halves — build it, then teach
+it. The teaching half names the AI-engineering concept the component embodies, why it
+is done this way here, and what the common wrong way looks like. Additionally, work is
+decomposed into many small named components (~24, grouped in 8 layers) with stated
+dependencies, replacing the 13 large phases as the unit of planning. The phase order
+(D-016, CLAUDE.md §5) still governs *sequence*; components are the *chunks*.
+
+**Why:** The owner is using this build as his route into AI engineering — "I am
+learning each and every thing that what we are developing" (2026-08-26). He intends to
+plan the chunks and instruct the work himself, not delegate it. That only functions if
+he can reason about each mechanism, so a delivery without an explanation is an
+incomplete delivery. Large phases are also unplannable by hand: "phase 3, retrieval" is
+not something you can schedule, whereas "C-09 retriever, depends on C-07, ~250 lines"
+is.
+
+**Consequence:** `CLAUDE.md` gains §1b, which is auto-loaded every session, so this
+survives new chats and context compaction. Component atlas published as an artifact and
+referenced from `STATE.md`. Output format is now build + concept + why-not-the-other-way,
+scaled to task size.
+
+## D-024 · 2026-08-26 · No orchestration framework; RAG built by hand; MCP kept
+
+**Decision:** No LangChain / LangGraph / LlamaIndex dependency. Retrieval (C-09) and
+context assembly (C-10) are written directly against the symbol index. MCP stays, as a
+thin protocol for the tool surface (C-05). Vector search is the *last* rung of the
+retrieval ladder, added only after exact/symbol/lexical/structural are proven
+insufficient — never the first thing built. Ollama and all local/third-party model
+backends are dropped from scope (supersedes the exploratory framing of D-018's `other`
+backend, which stays in config as an unused slot).
+
+**Why:** Three reasons, in order of weight. (1) A framework does the interesting part
+for you, and the interesting part is the thing the owner is here to learn (D-023).
+(2) LangChain's default paths assume a provider API key, which is the one constraint
+this project cannot bend (D-006, D-018). (3) The naive RAG recipe — chunk everything,
+embed, cosine similarity — is actively wrong for code, which has real structure: a
+function is a natural unit and an import is a real edge. `.sdd/config.yaml`'s
+`retrieval.order` already encodes the better approach.
+
+**Consequence:** More code written by hand, and it is understood. MCP earns its keep by
+being a protocol rather than a framework. If a vector store is ever added it enters at
+the bottom of the existing ladder, behind the same interface, as a new decision.
+
+## D-025 · 2026-08-26 · C-05 ships as bundled scripts first; MCP wraps the proven tools later
+
+**Decision:** The tool surface (C-05) is built as **Python scripts bundled inside the
+skill folders**, invoked via Bash — not as an MCP server. The MCP server is deferred
+until after M2, at which point the tools that proved useful get wrapped in it for
+forced schema validation and cross-agent reuse. Owner's call, 2026-08-26.
+
+**Why:** Of the three jobs the deterministic core exists for, only one — *forcing* a
+response shape rather than requesting it — actually requires MCP. The symbol index and
+the risk arithmetic run identically from a script. Bundled scripts unblock M1 in days
+instead of weeks, install as one artifact, work in any folder immediately, and leave
+every mechanism visible, which D-023 requires. Wrapping later costs some rework; being
+blocked costs everything.
+
+**Consequence:** Amends D-012's framing of MCP as *the* interop layer — MCP is now a
+later optimisation, not the entry point. `jspec/.mcp.json` stays on disk but is inert
+until the wrap happens; do not treat its presence as a working server. Schema
+validation in the interim is a script-side Pydantic check, which *rejects* but cannot
+force a retry — a known and accepted gap until MCP lands.
+
+## D-026 · 2026-08-26 · Golden set is reconstructed from git history, then owner-corrected
+
+**Decision:** The C-21 golden set is produced by mining `../GitHub/Made2Manage-Automation`
+(5,099 commits) for request→rework pairs, reconstructing 5–10 cases, and having the
+owner correct what was inferred wrongly. Owner's call, 2026-08-26.
+
+**Why:** Least owner effort for a blocking input, and git history holds the ground truth
+about what actually got reworked. The reconstruction will get the *what* right and the
+*why* wrong — the why is what the correction pass is for, and the why is the part that
+makes a case useful as an eval.
+
+**Consequence:** Every golden case must record which parts are observed from history and
+which are owner-supplied, because an eval built on an invented rationale measures nothing.
+Reads the M2M repo only — no writes, and `.claude/api.md` is never touched (§46, C-11).
+
+## D-027 · 2026-08-26 · Domain-neutrality gets components, not just a principle
+
+**Decision:** D-011's domain-agnostic principle is now backed by three real components,
+because a declared principle with no implementation is how a general tool quietly
+becomes a single-team tool:
+
+- **C-25 Profile engine** — the `Profile` contract, loader, merge/override resolution,
+  and validation. Everything domain-specific is read from here. Moves into **M1**,
+  alongside C-05, so the first tools are written against a profile from day one rather
+  than retrofitted.
+- **C-26 Project profiler** — scan an unknown repository, detect stack / layout /
+  runner / test framework, emit a *draft* profile the user corrects. Needs C-06, C-07.
+- **C-27 Convention learner** — infer the team's house style (naming, structure,
+  recurring patterns) from their own code and populate preferences. Needs C-07, C-09.
+  This is what D-010's "preferences are mostly *observed* from the repo, not
+  configured" was always describing; it had no home until now.
+
+IDs continue from 24 deliberately — existing component IDs are stable and never
+renumbered, because they are referenced from STATE.md, the journal and the artifacts.
+
+**Why:** Owner correction, 2026-08-26: *"This is common project which we are
+developing, not for specific M2M or anyother things. If we implement means, based on
+user requirements, it have to work as per their works."* Correct, and the repo agreed
+with him already — but `profiles/` was empty, no code read or wrote a profile, and the
+24-component atlas had no component for adaptation at all. The M2M-heavy examples in
+this session's two artifacts made the *product* look domain-specific when only the
+*illustration* was. Both were corrected.
+
+**Consequence:** The profile is the generalization boundary. Any Playwright-, M2M-,
+Aptean- or language-specific fact appearing in `core/` is a defect, catchable in review
+and eventually in CI. Profiles are **generated then corrected**, never hand-authored as
+a precondition of install — the same machine-drafts/human-corrects pattern as D-026.
+`profiles/playwright-e2e.yaml` becomes one example among several (python-service,
+react-app), never the reference implementation. The M2M repo stays useful as *test
+data* for evals (D-026) — that is not a domain dependency in the core.
+
+## D-028 · 2026-08-26 · Deliver in the chat, not in artifacts
+
+**Decision:** All explanation, architecture, plans and teaching go **in the Claude Code
+chat**. No HTML artifacts unless the owner explicitly asks for one.
+
+**Why:** Owner instruction, 2026-08-26: *"I dont need anything in HTML, instead Can I
+able to get them all the things only in Claude Code chat, so that I can learn on that
+too and ask doubts between them."* The point of D-023's teaching mode is that he can
+interrupt and ask questions mid-explanation. A published page is a monologue — he has
+to read it elsewhere and come back, which breaks exactly the back-and-forth that makes
+the teaching work.
+
+**Consequence:** Long answers are structured with clear headed sections so he can point
+at one and ask about it. Durable reference material goes to `memory/` and
+`DECISIONS.md` on disk — which is where it belonged anyway, and it is version-controlled
+and greppable, unlike a page. Two artifacts already published (JSpec Blueprint, JSpec
+Component Atlas) are left in place but are no longer the medium; do not update them
+unless asked.
+
+## D-029 · 2026-08-26 · The session journal is local memory, not a committed artifact
+
+**Decision:** `memory/journal/` is git-excluded. It keeps being written every session
+(CLAUDE.md §0b, unchanged) and keeps being read at session start — it is simply not
+version-controlled. `memory/journal/2026-08-22.md`, tracked since the initial commit, is
+untracked with `git rm --cached` so the file survives on disk. Everything else commits.
+
+**Why:** Owner instruction, 2026-08-26: *"Commit all the things, but not the chat history
+things forever, Just remember, but not need in repo."* The journal is working memory that
+serves one purpose — letting a new chat resume — and it grows by a page per session
+forever. Committing it means the repository's history becomes mostly transcript, and a
+reader looking for the project cannot find it. Anything from a session that must outlive
+the machine already has a committed home: `DECISIONS.md` for decisions, `AGENDA.md` for
+build state, `docs/` for reference.
+
+**Consequence:** **Git is no longer the journal's backup.** This folder syncs to OneDrive,
+which is. That is an accepted trade, not an oversight — the journal is reconstructible
+from the commits and the decisions if it is ever lost, as the 2026-08-23 backfill proved.
+`.gitignore` carries the reasoning inline so nobody "helpfully" re-adds it, and CLAUDE.md
+§0b says never to force-add it.

@@ -72,9 +72,7 @@ class Gate(BaseModel):
                 f"enforce, so it is checked by the schema, not by convention"
             )
         if self.decision is GateDecision.AUTO_APPROVED:
-            raise ValueError(
-                f"{self.wp_id}: HIGH band cannot be AUTO_APPROVED"
-            )
+            raise ValueError(f"{self.wp_id}: HIGH band cannot be AUTO_APPROVED")
         missing = [
             name
             for name, value in (

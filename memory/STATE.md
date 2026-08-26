@@ -3,88 +3,98 @@
 > Always describes **now**. Overwrite it; don't append history here.
 > History goes in `journal/`, decisions in `DECISIONS.md`.
 
-**Last updated:** 2026-08-23
-**Phase:** 0 — bootstrap (merged phase order; see `CLAUDE.md` §5)
+**Last updated:** 2026-08-26
+**Phase:** 0 — bootstrap, ~90% complete
+**Unit of planning:** the **27-component checklist in `memory/AGENDA.md`** (D-023, D-027),
+not the 13 phases. **`AGENDA.md` is the source of truth for build state** — this file
+carries open questions, hazards and context around it.
+**Delivery medium:** the chat, not artifacts (D-028).
 
 ---
 
 ## Where the project stands
 
-The owner supplied a 70-section Master Build Specification on 2026-08-23. It was
-reconciled with the existing JSpec design rather than replacing it — see
-`DECISIONS.md` **D-016…D-022**, and `docs/MASTER-PLAN-DIGEST.md` for the one-page
-binding summary that is auto-loaded every session.
+Phase 0 is essentially done. The foundation, the type system and the router are
+built and tested — 40 tests green on 3.13. **Nothing runs end to end**, because
+`core/src/jspec/mcp_server.py` is ten tool signatures with zero bodies. That single
+file is the only thing between a design and a working tool.
 
-**Four conflicts, settled:** core stays Python (D-017) · provider adapters yes,
-key-based default no (D-018) · layout mapped, not renamed (D-019) · an eval phase is
-inserted at 4.5 because the master plan had no phase that measures artifact quality
-(D-020). **Six engines adopted** from the document that JSpec lacked: context
-engineering, experience, repair, traceability, knowledge capture, security/redaction
-(D-021).
+**Working mode changed again (D-023):** every delivery now ships in two halves —
+build it, then teach the concept behind it. The owner is learning AI engineering by
+building this and plans the chunks himself. `CLAUDE.md` §1b carries this and is
+auto-loaded, so it survives new chats.
 
-**Working mode changed (D-022):** no more Yes/No approval per file. Act; ask only on
-genuine ambiguity. Still confirm destructive, outbound, or high-risk shared changes.
+**Scope narrowed (D-024):** no LangChain / LangGraph / LlamaIndex. Retrieval is
+hand-built and structure-first; vector search is the last rung, not the first. MCP
+stays. Ollama and third-party model backends are dropped at the owner's instruction.
 
-### Exists and is real
+### Built and working — 4 of 24 components
 
-- `docs/AI_SDD_MASTER_PLAN.md` — the governing spec, 70 sections, mojibake repaired,
-  §5/§32/§33/§57/§62 annotated with their amendments
-- `docs/MASTER-PLAN-DIGEST.md` — auto-imported by `CLAUDE.md`
-- `.sdd/constitution.md` — §45's 12 rules + 8 JSpec non-negotiables + precedence order
-- `.sdd/config.yaml` — providers, context ladder, preferences, never-send list,
-  retrieval order, repair limit, risk bands, native validation commands
-- `.sdd/state.json` — task state (§55)
-- `core/src/jspec/contracts/spec.py` — Spec-side contracts, tested
-- `core/src/jspec/router.py` — deterministic T-0…T-3 classifier, tested
-- `templates/registry.yaml` + `templates/specify.yaml`
-- `jspec/` — plugin manifest, 3 skills, 2 agents, hooks, `.mcp.json`
-- CI on 3.12 + 3.13, including a check that fails the build if an API key appears
+| ID | Component | Evidence |
+|---|---|---|
+| C-01 | Contracts — 7 modules, `KINDS` registry, `json_schema()` | 724 ln, no stubs, tested |
+| C-02 | Router — T-0…T-3, budgets, confidence floor | 222 ln, tested |
+| C-03 | Memory — CLAUDE.md + STATE + journal + DECISIONS | in daily use |
+| C-04 | Guardrails — constitution, config.yaml, CI | CI enforces no-API-key + skill lock |
 
-### Stubbed or missing
+### Stubbed — 3 components
 
-- `core/src/jspec/mcp_server.py` — 10 signatures, 0 bodies
-- `core/src/jspec/risk.py` — constants only, 5 functions unimplemented
-- Contracts: `Plan`, `WorkPackage`, `RiskItem`, `Gate`, `Review`, `Drift`, `Fix`,
-  `Clarifications`, `Classification` — **in progress this session**
-- Templates: 8 of 9 declared in `registry.yaml` have no body file
-- Rubrics: 0 of 9 · Profiles: 0 · Golden cases: **0**
-- Repository intelligence / retrieval / context engineering / experience — not started
+- **C-05 Tool surface** (`mcp_server.py`) — 10 signatures, 0 bodies. **Blocks everything.**
+- **C-16 Risk engine** (`risk.py`) — 3 constants, 5 functions unimplemented
+- **C-12 Template registry** — 1 of 9 templates written (`specify.yaml`)
+
+### Not started — 17 components
+
+C-06 symbol extractor · C-07 symbol store · C-08 blast radius · C-09 retriever ·
+C-10 context builder · C-11 redactor · C-13 judge port · C-14 skills (3 of ~9 done) ·
+C-15 decomposer · C-17 gate ledger · C-18 generator · C-19 validator · C-20 repair ·
+C-21 evals · C-22 experience · C-23 traceability · C-24 cost ledger
+
+`profiles/`, `specs/`, `evals/golden/`, `evals/rubrics/` are all empty. `.sdd/` is
+missing `index/ cache/ knowledge/ traces/ metrics/ gates.jsonl`.
 
 ## Next actions, in order
 
-1. Finish Phase 0: the remaining contracts + `KINDS` schema-export registry + tests;
-   green `pytest` and `ruff` on Python 3.13.
-2. Commit. D-022 makes git the rollback mechanism, so phase-boundary commits are now
-   load-bearing rather than optional.
-3. Report per master plan §67 and **stop** — §66 forbids auto-continuing to Phase 1.
-4. Then Phase 1 (repository intelligence): tree-sitter symbol extraction → SQLite,
-   incremental re-index on content hash, `blast_radius` as a real graph traversal.
-5. **Golden set** — still the one blocking owner input, now for Phase 4.5. Approved
-   approach: mine `../GitHub/Made2Manage-Automation` (5,099 commits) for
-   request→rework pairs, owner corrects the reconstruction.
+1. **M1 — C-05.** Decide MCP server vs. scripts bundled in the skill (open question
+   below), then implement three tools first: `classify_task`, `validate_artifact`,
+   `blast_radius`. Nothing is testable until this lands.
+2. **M2 — C-06 → C-07 → C-08.** tree-sitter extractor → SQLite index on content hash
+   → graph traversal. **Stop here and use it for two weeks** before building more.
+3. Commit at each component boundary. D-022 makes git the rollback mechanism.
+4. Then M3 (C-09…C-14), M4 (C-15…C-17), M5 (C-21), M6 (C-18…C-24).
+
+Full detail, dependencies and per-component learning notes: **JSpec Component Atlas**
+artifact, published 2026-08-26.
 
 ## Open questions
 
 | # | Question | Blocks |
 |---|---|---|
-| 1 | Which repos enter the code graph — M2M only, or App Central shared / CRM / EAM too? | Phase 1 |
-| 2 | Risk band thresholds and who counts as a named approver | gates |
-| 3 | How does headless `claude -p` authenticate inside an Azure DevOps pipeline on Enterprise? | CI rollout only |
-| 4 | Data-handling sign-off: repo is classified `Internal`. §46 redaction is now designed — does that satisfy it? | CI rollout only |
-| 5 | Directory-management access in the Aptean Enterprise org | public marketplace only |
+| 1 | Which repos enter the code graph — M2M only, or App Central shared / CRM / EAM too? | C-06 / C-07 |
+| 2 | Risk band thresholds, and who counts as a named approver | C-17 |
+| 3 | How does headless `claude -p` authenticate inside an Azure DevOps pipeline? | CI rollout only |
+| 4 | Directory-management access in the Aptean Enterprise org | public marketplace only |
 
-**Resolved since last update:** no AI API key is available and none will be — Claude
-Code integration only. That is now settled in D-018, not an open question.
+**Closed 2026-08-26:**
+- **Ollama / local-model backends** — dropped by the owner (D-024). The old
+  data-handling sign-off question dies with it: nothing leaves the machine.
+- **C-05 shape** — **bundled scripts first**, MCP wraps the proven tools after M2
+  (D-025). *M1 is unblocked; the owner sequences when it starts.*
+- **Golden set** — reconstruct from the 5,099 commits, owner corrects the inferred
+  reasoning (D-026). Read-only on the M2M repo; `.claude/api.md` never touched.
 
 ## Watch out for
 
-- **`risk.py` mislabels its own stubs** `"build step 2"` while `mcp_server.py` says
-  risk work is `"build step 8"`. Both predate the merged phase order and should be
-  renumbered to the phase map in `CLAUDE.md` §5.
+- **Two artifacts exist and both stay current.** *JSpec Blueprint* (what this is, why
+  it's useful, the three questions) and *JSpec Component Atlas* (all 24 components,
+  chunk plan, framework verdicts). Update rather than republishing new ones.
+- **Stub labels still use pre-merge numbering.** `risk.py` says `"build step 2"` while
+  its docstring says Phase 7; `mcp_server.py` scatters steps 3/4/6/8/9. Renumber to
+  component IDs when touching either file.
+- **The 2026-08-23 session was never journaled** — the largest commit (`ccf8699`,
+  3,088 insertions) has no journal entry. Backfill from the commit if it matters.
+- **`templates/registry.yaml` declares 9 templates; 1 exists.** Check the file exists
+  before assuming a template is available.
 - **Two state files, different jobs.** `memory/STATE.md` = across chats.
   `.sdd/state.json` = across steps of one task. Do not merge them.
-- **`templates/registry.yaml` declares 9 templates; 1 exists.** The registry is
-  aspirational — check the file exists before assuming a template is available.
 - Parent `Documents/CLAUDE.md` is the **M2M Playwright** ruleset, not this project's.
-- Autopilot risk: the master plan's §69 runs the full chain for every `sdd implement`.
-  Route depth (T-0…T-3) is the guard, and it must survive the merge.

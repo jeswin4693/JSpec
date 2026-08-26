@@ -11,9 +11,11 @@
 Every new chat starts with no memory of previous chats. This folder carries that
 memory instead. **Before responding to the first request of a session:**
 
-1. Read `memory/STATE.md` — current state, what's done, what's next, open questions.
-2. Read the newest 1–2 files in `memory/journal/` — what happened most recently.
-3. Skim `memory/DECISIONS.md` — decisions already made. **Never re-litigate a
+1. Read `memory/AGENDA.md` — the 27-component checklist. What is done, what is next,
+   which milestone we are in. **This is the source of truth for build state.**
+2. Read `memory/STATE.md` — current state, open questions, things to watch out for.
+3. Read the newest 1–2 files in `memory/journal/` — what happened most recently.
+4. Skim `memory/DECISIONS.md` — decisions already made. **Never re-litigate a
    decision recorded there.** If you think one is wrong, say so once, cite the
    entry, and ask.
 
@@ -21,13 +23,23 @@ Then state in one line where the project stands, and continue the work.
 
 ## 0b. SESSION END PROTOCOL — do this before the session goes quiet
 
-Whenever you finish a meaningful unit of work (not every message):
+**Every session gets journaled. No exceptions** — the owner's instruction is that this
+folder remembers every chat forever, so a session with no journal entry is a session
+that never happened. Write it before the session goes quiet, not "if it seems worth it."
 
 1. Append to today's journal: `memory/journal/YYYY-MM-DD.md` (create if absent).
-2. Update `memory/STATE.md` — it must always describe *now*, not history.
-3. Append any new decision to `memory/DECISIONS.md` (append-only, never edit past
+   Record what was asked, what was decided, what changed on disk, and what is still
+   outstanding. Multiple sessions in one day append as `## Session N`.
+   **The journal is git-excluded on purpose (D-029) — local working memory, not a
+   project artifact. Keep writing it; never `git add -f` it.** Anything that must
+   outlive this machine belongs in `DECISIONS.md`, `AGENDA.md` or `docs/`, which are
+   committed.
+2. Update `memory/AGENDA.md` if any component or milestone changed state — flip the
+   box, update the Progress table, reset **Right now / Next**.
+3. Update `memory/STATE.md` — it must always describe *now*, not history.
+4. Append any new decision to `memory/DECISIONS.md` (append-only, never edit past
    entries).
-4. If a fact will matter in months, not days, also write it to persistent memory
+5. If a fact will matter in months, not days, also write it to persistent memory
    at `C:\Users\jj1\.claude\projects\c--Users-jj1-OneDrive---Aptean-online-Documents-AI-SDD\memory\`
    and index it in that folder's `MEMORY.md`.
 
@@ -56,6 +68,28 @@ What carries over here, because it is good practice and the owner relies on it:
 - **Reuse before adding.** Search before writing a new helper. Duplicated logic
   is rejected.
 - **Scale output to task size.** Dense, no filler.
+
+## 1b. Teach as you build — every delivery, no exceptions
+
+The owner is learning AI engineering *by* building JSpec. Stated 2026-08-26:
+*"I am learning each and every thing that what we are developing."* He plans the
+chunks and instructs the work himself, which only functions if he understands the
+mechanism, not just the outcome. So every meaningful unit of work has **two halves**:
+
+1. **Build it.** Act, don't ask permission (§1, D-022).
+2. **Then teach it.** Name the AI-engineering concept the component embodies —
+   structured output, hybrid retrieval, context engineering, LLM-as-judge, bounded
+   self-correction, tool use, and so on. Say why it is done this way *here*, and what
+   the common wrong way looks like. Plain language first; name the jargon second so
+   he can go read further.
+
+Corollary: **prefer many small named components over few large phases.** Work must
+arrive in units he can sequence himself, with dependencies stated. Recorded as D-023.
+
+**Deliver in the chat (D-028).** No HTML artifacts unless he explicitly asks. He needs
+to interrupt and ask questions mid-explanation, and a published page is a monologue.
+Structure long answers with clear headed sections so he can point at one and ask about
+it. Durable reference goes to `memory/` and `DECISIONS.md` — greppable and versioned.
 
 ## 2. What JSpec is
 
@@ -97,7 +131,7 @@ Memory       memory/                           → this folder
 |---|---|
 | `memory/` | **session** memory — read at start, written at end |
 | `.sdd/` | **runtime** config + **task** state: `constitution.md`, `config.yaml`, `state.json`, `index/`, `cache/`, `knowledge/`, `traces/`, `metrics/`, `gates.jsonl` |
-| `docs/` | the master plan + its auto-loaded digest |
+| `docs/` | the master plan, its auto-loaded digest, and `COMPONENT-GUIDE.md` — the full description of all 27 components. **Read the relevant entry before building any component.** |
 | `jspec/` | the Claude Code plugin (skills, agents, hooks, `.mcp.json`) |
 | `core/` | Python: contracts, MCP server, router, risk engine |
 | `templates/` | prompt template registry — one per command, with budgets |
