@@ -111,6 +111,41 @@ jobs:
           sys.exit(chr(10).join(errs)) if errs else print('ok skills')
           "
 
+      - name: Every shipped profile is valid
+        run: |
+          python -c "
+          import sys, yaml, pathlib
+          required = ('name', 'description', 'languages', 'source_dirs', 'validation')
+          errs = []
+          paths = sorted(pathlib.Path('profiles').glob('*.yaml'))
+          if not paths:
+              sys.exit('no profiles shipped; C-25 requires at least two worked examples')
+          for path in paths:
+              body = yaml.safe_load(path.read_text()) or {}
+              missing = [k for k in required if k not in body]
+              if missing:
+                  errs.append(f'{path}: missing {missing}')
+              declared = body.get('name')
+              if declared != path.stem:
+                  errs.append(f'{path}: name {declared!r} != filename {path.stem!r}')
+              # A profile with no test command lets the validator run nothing and
+              # report success. That false green is the failure C-25 exists to stop.
+              if not (body.get('validation') or {}).get('test'):
+                  errs.append(f'{path}: validation.test is required')
+          sys.exit(chr(10).join(errs)) if errs else print(f'ok {len(paths)} profiles')
+          "
+
+      - name: The tool surface runs, and unbuilt tools refuse rather than guess
+        run: |
+          python core/scripts/jspec.py tools
+          python core/scripts/jspec.py classify "add password reset" > /dev/null
+          python core/scripts/jspec.py plan-chain T-2 --profile python-service > /dev/null
+          echo '{}' | python core/scripts/jspec.py validate profile - && exit 1 || true
+          echo ok tool surface
+
+      - name: Domain knowledge stays in profiles, not in core (constitution rule 20)
+        run: python core/scripts/check_domain_neutrality.py
+
       - name: No API key may be required on any default path
         run: |
           ! grep -rn --include=*.py --include=*.yaml --include=*.json \

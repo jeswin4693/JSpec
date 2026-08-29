@@ -465,3 +465,85 @@ which is. That is an accepted trade, not an oversight — the journal is reconst
 from the commits and the decisions if it is ever lost, as the 2026-08-23 backfill proved.
 `.gitignore` carries the reasoning inline so nobody "helpfully" re-adds it, and CLAUDE.md
 §0b says never to force-add it.
+
+## D-030 · 2026-08-29 · C-25 ships thin; the profile engine is a seam, not a config language
+
+**Decision:** The `Profile` contract carries only fields something reads: `name`,
+`description`, `languages`, `source_dirs`, `test_dirs`, `validation`. Deferred, each
+until a live consumer exists — `extends`/override resolution (no profile inherits from
+another yet), `risk_signals` (C-16 is a stub and should state its own shape),
+`templates` (C-12 has 1 of 9), `shared_dirs` (C-16's correlation amplifier does not
+exist). `resolve(project_dir)` auto-detection is not here either: that is C-26's job,
+and two detectors disagreeing is worse than one arriving later.
+`docs/COMPONENT-GUIDE.md` sizes C-25 at ~250 lines including override resolution; the
+shipped contract + loader is 258 lines with the deferrals removed and the failure modes
+added instead.
+
+**Why:** The owner asked the right question — *"why is there a need of profiles here?"*
+The answer that survives scrutiny is not "other teams someday". It is that two real
+projects already exist on this machine (this repo, Python/pytest; the Playwright suite,
+TypeScript/playwright), `.sdd/config.yaml` can hold only one set of commands, and its own
+comment already said those belonged in a profile. That justifies the *seam*. It does not
+justify an inheritance system with one user. Premature generalization and premature
+specialization fail asymmetrically: hardcoding is cheap to write and expensive to undo,
+a config layer is expensive to write and cheap to ignore — so create the seam, leave it
+thin, and add a field only when something reads it.
+
+**Consequence:** `.sdd/config.yaml` no longer carries `validation.python` — those
+commands moved to `profiles/jspec-self.yaml` (constitution rule 2: the duplicate is what
+drifts). The config file gained a `profiles:` section with **no `default:` key**, on
+purpose: a global default profile is how the wrong linter silently runs against the wrong
+repository. Two CI gates now enforce rule 20 — every shipped profile must validate and
+declare `validation.test`, and `core/scripts/check_domain_neutrality.py` fails the build
+if any module outside `profiles.py` / `contracts/profile.py` names a language, framework
+or test runner in executable code (docstrings are stripped first, so explaining a rule is
+not breaking it). Adding a field to `Profile` later is cheap; removing one that shipped
+profiles already set is not.
+
+## D-031 · 2026-08-29 · The tool surface is one `jspec` command, not per-skill scripts
+
+**Decision:** C-05 ships as a single command with subcommands — `jspec.cli` behind the
+`jspec = "jspec.cli:main"` entry point that `core/pyproject.toml` has declared since the
+first commit — plus `core/scripts/jspec.py`, a dependency-free launcher for checkouts
+where the package is not installed. Only the three tools backed by built components are
+registered as commands (`classify`, `plan-chain`, `validate`, plus `tools`); the other
+seven stay visible through `jspec tools` with the component each waits on. Owner's call,
+2026-08-29, on a flagged reading of D-025.
+
+**Why:** D-025 says "Python scripts bundled inside the skill folders, invoked via Bash".
+Read literally that puts shared logic in three skill folders at once, which constitution
+rule 2 forbids — and D-025's stated reasons (invoked via Bash, not MCP, unblocks M1 in
+days, every mechanism visible) are all satisfied by one command. This amends D-025's
+*location*, not its substance: still scripts, still Bash, still no MCP until after M2.
+The launcher exists because pip is broken inside this repo's venv, so "just install it"
+is not available and a skill must work in a bare checkout.
+
+**Consequence:** `jspec.mcp_server` keeps its ten signatures but holds no logic — it
+delegates to `jspec.tools`, the single registry of what exists, so the two surfaces
+cannot drift. `main()` still refuses to start, now citing D-025 rather than a stale
+build-step number. The router skill was rewired from "call `classify_task` (MCP)" — an
+instruction nothing could execute — to the real commands, and it now states plainly
+which steps are unavailable rather than implying the whole pipeline works.
+
+## D-032 · 2026-08-29 · The code graph spans one root folder and every sub-folder in it
+
+**Decision:** The symbol index (C-06/C-07) is built over **one root directory, indexed
+recursively across all of its sub-folders**, and calls that cross sub-folder boundaries
+are followed like any other. Every indexed symbol carries which sub-folder it belongs
+to, from the first version — not added later. Owner's answer, 2026-08-29, to the last
+open question blocking M2.
+
+**Why:** The failure this prevents is the dangerous kind. Change something in a shared
+sub-folder, ask what breaks, and an index scoped to one sub-folder answers "3 places"
+with total confidence when the true answer is twenty — including callers in sibling
+folders it never read. It does not say "I am unsure"; it returns a clean, incomplete
+list, and a clean list is one you stop double-checking.
+
+**Consequence:** The index schema carries a module/sub-folder column from the first
+migration. Retrofitting it means rebuilding the index and rewriting every query, whereas
+including it now costs one column that stays uniform if a project only ever has one
+module. Blast radius (C-08) must report which sub-folder each caller lives in, since
+"this breaks something in another module" is a different conversation from "this breaks
+two files next to the one you are editing". Note this is a **single root**, not several
+separately-cloned repositories: cross-repository indexing is not in scope and should be
+raised as a new question if it ever is.

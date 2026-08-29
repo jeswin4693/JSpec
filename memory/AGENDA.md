@@ -18,13 +18,17 @@ D-027). Where an example is needed below it is labelled as an example.
 
 | | Count | Which |
 |---|---|---|
-| ✅ Done | **4** | C-01, C-02, C-03, C-04 |
-| 🟡 Partial / stub | **4** | C-05, C-12, C-14, C-16 |
-| ⬜ Not started | **19** | everything else |
+| ✅ Done | **6** | C-01, C-02, C-03, C-04, C-05, C-25 |
+| 🟡 Partial / stub | **3** | C-12, C-14, C-16 |
+| ⬜ Not started | **18** | everything else |
 | **Total** | **27** | 9 groups, 6 milestones |
 
-**Right now:** Phase 0 bootstrap ~90%. Nothing runs end to end — C-05 is empty.
-**Next:** M1 = C-25 then C-05.
+**Right now:** **M1 complete.** C-25 and C-05 both landed 2026-08-29 — 99 tests green.
+JSpec runs: `jspec classify` / `plan-chain` / `validate` / `tools` work end to end, and
+the router skill calls them. 3 of 10 tools are built; the other 7 refuse rather than
+guess, each naming the component it waits on.
+**Next:** M2 = C-06 → C-07 → C-08 → C-26. Scope settled 2026-08-29 (D-032): one root
+folder, every sub-folder indexed, cross-folder calls followed.
 
 **Legend:** `[x]` done · `[~]` partial or stub · `[ ]` not started · `[!]` blocked on input
 
@@ -61,10 +65,12 @@ saying what changed. Never renumber a component ID — they are referenced from
 
 ## Group 1b · Adaptation — *what makes it work for anyone*
 
-- [ ] **C-25 · Profile engine** — The `Profile` contract, loader, override resolution and
-      validation. The single place any project-specific fact may live: languages, layout,
-      runner, validation commands, risk taxonomy, conventions. **Build this before C-05.**
-      · ~250 ln · needs: C-01 · *teaches: where to put the generalization boundary*
+- [x] **C-25 · Profile engine** — The `Profile` contract, loader and validation. The
+      single place any project-specific fact may live: languages, layout, validation
+      commands. Shipped **thin** (D-030): `extends`/override resolution, `risk_signals`
+      and `templates` deferred until a component reads them. 3 profiles ship
+      (python-service, playwright-e2e, jspec-self); 2 CI gates enforce it.
+      · 258 ln + 21 tests · needs: C-01 · *teaches: where to put the generalization boundary*
 
 - [ ] **C-26 · Project profiler** — Point it at a repository it has never seen; it works
       out the languages, frameworks, test runner and layout, then writes a **draft**
@@ -77,10 +83,13 @@ saying what changed. Never renumber a component ID — they are referenced from
 
 ## Group 2 · The bridge — *nothing runs until this exists*
 
-- [~] **C-05 · Tool surface** — How a skill actually calls the Python side. Ten tools are
-      named and documented; **every body is empty.** Shipping as scripts bundled in the
-      skill folders, invoked via Bash (D-025); MCP wraps the proven tools after M2.
-      · 127 → ~400 ln · needs: C-01, C-25 · *teaches: tool use, function calling, what MCP is*
+- [x] **C-05 · Tool surface** — How a skill calls the Python side. `jspec` command
+      (`cli.py`) + `tools.py` registry; 4 commands over 3 built tools, invoked via Bash
+      per D-025. The other 7 raise `ToolUnavailable` naming their blocker — never a
+      placeholder. **Deviation from the guide:** its third named tool was `blast_radius`,
+      which needs C-07; `plan_chain` took its place. Zero-install launcher at
+      `core/scripts/jspec.py` because pip is broken in the venv.
+      · 480 ln + 38 tests · needs: C-01, C-25 · *teaches: tool use, function calling, what MCP is*
 
 ## Group 3 · Repo intelligence — *where it first becomes worth using*
 
@@ -187,9 +196,10 @@ saying what changed. Never renumber a component ID — they are referenced from
 
 ## Milestones — the order to build in
 
-- [ ] **M1 · It runs at all** — `C-25` → `C-05`
-      Skills can call Python, against a profile from day one. Nothing else is testable
-      until this lands. **2 components.**
+- [x] **M1 · It runs at all** — ~~`C-25`~~ → ~~`C-05`~~ · **done 2026-08-29**
+      Skills call Python against a profile. `jspec classify "add password reset"` returns
+      a route, a chain and a budget; `jspec validate` rejects a malformed artifact and
+      names every field. **2 components, both done.**
 
 - [ ] **M2 · It knows the repo — stop here and use it** — `C-06` → `C-07` → `C-08` → `C-26`
       Blast radius works. "What breaks if I change this?" answered completely, in
@@ -218,11 +228,10 @@ saying what changed. Never renumber a component ID — they are referenced from
 
 | # | Question | Blocks |
 |---|---|---|
-| 1 | Which repos enter the code graph — one, or several sharing code? | C-06, C-07 |
 | 2 | Risk band thresholds, and who counts as a named approver | C-17 |
 | 3 | How does headless `claude -p` authenticate inside a CI pipeline? | CI rollout only |
 | 4 | Directory-management access in the Aptean Enterprise org | public marketplace only |
 
-Settled: C-05 shape (D-025, bundled scripts) · golden set method (D-026, reconstruct
-then correct) · no frameworks / no Ollama (D-024) · domain neutrality gets components
+Settled: code-graph scope (D-032, one root + all sub-folders) · C-05 shape (D-025,
+bundled scripts) · golden set method (D-026, reconstruct then correct) · no frameworks / no Ollama (D-024) · domain neutrality gets components
 (D-027) · deliver in chat (D-028).

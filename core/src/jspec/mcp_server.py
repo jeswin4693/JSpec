@@ -1,32 +1,49 @@
-"""JSpec MCP server - the deterministic half of the system.
+"""JSpec MCP server - the same tool surface behind an MCP transport.
 
-STATUS: STUB. Tool signatures are settled; bodies are not implemented. Build step 3.
+STATUS: INERT, deliberately. D-025 defers MCP until after M2: the tool surface ships
+first as the `jspec` command (`jspec.cli`), because only one of MCP's three benefits
+- *forcing* a response shape rather than requesting it - actually requires it. The
+symbol index and the risk arithmetic run identically from a command. `jspec/.mcp.json`
+stays on disk but this server does not start; do not read its presence as a working
+server.
+
+This module holds no logic of its own. Every tool delegates to `jspec.tools`, which
+is the single source of truth for what exists and what each unbuilt tool waits on. A
+second status list here would drift, and a drifted list is worse than none: it would
+advertise a tool that cannot run.
+
+Three tools are answerable today (classify_task, plan_chain, validate_artifact). The
+other seven raise `ToolUnavailable` naming their blocking component.
 
 This server performs NO model calls and needs NO API key (D-006). Claude Code supplies
-judgement; this supplies arithmetic, graph queries, validation, and state. Tool input
-schemas are generated from `jspec.contracts`, which is how artifacts get enforced
-structure without the Anthropic API (D-002).
-
-Run as: python -m jspec.mcp_server   (see jspec/.mcp.json)
+judgement; this supplies arithmetic, graph queries, validation and state. Tool input
+schemas come from `jspec.contracts`, which is how artifacts get enforced structure
+without the Anthropic API (D-002).
 """
 
 from __future__ import annotations
 
+from typing import Any
+
+from jspec import tools
+
 # --- routing ---------------------------------------------------------------------
 
 
-def classify_task(prompt: str) -> dict:
+def classify_task(prompt: str) -> dict[str, Any]:
     """Route a raw prompt to T-0..T-3 with confidence, chain, and budgets.
 
-    Wraps `jspec.router.classify`, supplying RepoState from git and the code graph.
-    Deterministic and nearly free - the router must never cost a model call.
+    Wraps `jspec.router.classify`. Deterministic and nearly free - the router must
+    never cost a model call.
     """
-    raise NotImplementedError("build step 3")
+    return tools.classify_task(prompt)
 
 
-def plan_chain(route: str, profile: str, skip: list[str] | None = None) -> dict:
+def plan_chain(
+    route: str, profile: str | None = None, skip: list[str] | None = None
+) -> dict[str, Any]:
     """The ordered steps for a route under a profile, minus justified skips."""
-    raise NotImplementedError("build step 3")
+    return tools.plan_chain(route, profile=profile, skip=skip)
 
 
 # --- artifacts -------------------------------------------------------------------
@@ -38,12 +55,12 @@ def submit_spec(spec: dict) -> dict:
     Returns `{ok, path, errors}`. Skills must never write spec.md directly - an
     artifact that bypassed validation is untrusted.
     """
-    raise NotImplementedError("build step 3")
+    raise tools.unavailable("submit_spec")
 
 
-def validate_artifact(kind: str, payload: dict) -> dict:
+def validate_artifact(kind: str, payload: dict) -> dict[str, Any]:
     """Validate any artifact without persisting it. Used by evals and by CI."""
-    raise NotImplementedError("build step 3")
+    return tools.validate_artifact(kind, payload)
 
 
 # --- analysis (deterministic - no model) -----------------------------------------
@@ -55,7 +72,7 @@ def blast_radius(symbol: str, path: str | None = None) -> dict:
     This is a graph traversal, not an opinion. It is what makes the risk numbers
     trustworthy enough to gate on (D-003).
     """
-    raise NotImplementedError("build step 6")
+    raise tools.unavailable("blast_radius")
 
 
 def find_existing(intent: str) -> dict:
@@ -64,12 +81,12 @@ def find_existing(intent: str) -> dict:
     Reuse enforcement: answers "does this already exist?" before a line is written,
     in milliseconds instead of a manual read-through.
     """
-    raise NotImplementedError("build step 6")
+    raise tools.unavailable("find_existing")
 
 
 def score_risk(work_packages: list[dict]) -> dict:
     """Per-WP risk, DAG propagation, correlation, then one verdict + top 3 drivers."""
-    raise NotImplementedError("build step 8")
+    raise tools.unavailable("score_risk")
 
 
 # --- governance & memory ---------------------------------------------------------
@@ -84,12 +101,12 @@ def record_gate(
     evidence_refs: list[str],
 ) -> dict:
     """Append to `gates.jsonl`. Append-only - never rewrite a past gate."""
-    raise NotImplementedError("build step 9")
+    raise tools.unavailable("record_gate")
 
 
 def record_preference(key: str, value: str, source: str) -> dict:
     """Persist a resolved unknown so it is never asked twice (D-010)."""
-    raise NotImplementedError("build step 3")
+    raise tools.unavailable("record_preference")
 
 
 def record_cost(step: str, tokens: int, usd: float, budget: int) -> dict:
@@ -98,7 +115,7 @@ def record_cost(step: str, tokens: int, usd: float, budget: int) -> dict:
     The router reads this history to get cheaper over time. What gets measured gets
     reduced - and it is what turns a claim about efficiency into a number.
     """
-    raise NotImplementedError("build step 4")
+    raise tools.unavailable("record_cost")
 
 
 TOOLS = (
@@ -117,9 +134,9 @@ TOOLS = (
 
 def main() -> None:
     raise NotImplementedError(
-        "MCP server not implemented yet - build step 3. "
-        "Contracts (contracts/spec.py) and the router (router.py) are done; wire "
-        "them to an MCP transport here."
+        "The MCP server is deferred until after M2 (D-025). The tool surface ships "
+        "as the `jspec` command - run `jspec tools` to see all ten and their status. "
+        "Wrap the proven tools in an MCP transport here once M2 lands."
     )
 
 

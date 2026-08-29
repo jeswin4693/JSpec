@@ -14,16 +14,48 @@ know which command to call.**
 
 ## Step 1 — Classify before you act
 
-Call `classify_task` (MCP) with the user's raw prompt. It returns:
+Run the `jspec` command. It is deterministic, needs no model call, and costs
+nothing:
+
+```bash
+jspec classify "<the user's raw prompt>"
+```
+
+If `jspec` is not on PATH (the package is not pip-installed), use the launcher — same
+code, no install, works from any directory:
+
+```bash
+python <repo>/core/scripts/jspec.py classify "<the user's raw prompt>"
+```
+
+Supply repo facts when you have them — they are measured, so they outrank
+vocabulary and sharply raise confidence:
+
+```bash
+jspec classify "<prompt>" --failing-tests 3 --files-touched 40
+```
+
+It prints JSON:
 
 ```
-{ route, confidence, chain[], question_budget, token_budget, signals[] }
+{ route, confidence, chain[], question_budget, token_budget, signals[],
+  needs_model_adjudication }
 ```
 
-It is deterministic and nearly free — it reads regex signals, git state, the code
-graph, and this user's history. **Do not reason your way to a route yourself when
-the tool can tell you.** Only when `confidence < 0.6` do you adjudicate, and then
+**Do not reason your way to a route yourself when the tool can tell you.** Only when
+`needs_model_adjudication` is true (confidence below 0.6) do you adjudicate, and then
 you state which signals you weighed.
+
+Then get the steps to run, skipping only what you can justify:
+
+```bash
+jspec plan-chain T-2 --profile <name> --skip clarify
+```
+
+Run `jspec tools` to see all ten tools and which are built. Seven are not yet — they
+refuse rather than guess, and the message names the component each waits on. If a
+step needs one of those, say so plainly and stop; do not substitute your own estimate
+for a measurement.
 
 ## Step 2 — Respect the route
 
@@ -43,9 +75,18 @@ Execute `chain[]` in order, invoking the step skills (`/jspec:specify`,
 `/jspec:plan`, …). They are `disable-model-invocation` on purpose — you call them,
 they never self-trigger, and the spec step is never skipped on a T-2.
 
-Between steps, artifacts pass through the MCP server (`submit_spec`,
-`submit_plan`, …) so every one is schema-validated. If validation fails, fix the
-artifact and resubmit. Never write an artifact straight to disk yourself.
+Between steps, every artifact is schema-validated before it travels:
+
+```bash
+echo '<artifact json>' | jspec validate spec -
+```
+
+Exit 0 means valid; exit 1 means it printed the problems — fix them and revalidate.
+Never let an unvalidated artifact reach the next step.
+
+`submit_spec` (validate **and** persist **and** render) is not built yet — it waits
+on C-12/C-14. Until then, validate with the command above and hand the artifact to
+the next step in-session rather than writing spec files to disk.
 
 ## Step 4 — Questions: ask least, never twice
 
@@ -58,8 +99,11 @@ For every unknown, resolve in this order and stop at the first hit:
    surface it at the gate.
 5. **Ask** — only if being wrong would waste the whole run.
 
-Stay inside `question_budget`. **Batch every question into one turn** — never
-drip-feed. Persist every answer via `record_preference` so it is never asked again.
+Stay inside `question_budget` (the classify output tells you the number).
+**Batch every question into one turn** — never drip-feed.
+
+`record_preference` is not built yet, so an answer cannot be persisted automatically:
+carry answers within the session, and note anything durable in `memory/` at the end.
 
 Most unknowns should become flagged assumptions. Reviewing three flagged defaults at
 a gate is cheaper for the user than answering three questions mid-flight.
@@ -72,8 +116,9 @@ Gate stringency is priced by risk, not applied uniformly:
 - **medium** → show the evidence, ask for one Yes
 - **high** → named approver, impact scan, rollback plan, explicit Yes
 
-Every decision appends to `gates.jsonl` via `record_gate`. Never approve on the
-user's behalf at medium or high.
+`record_gate` and the ledger are not built yet (C-17). Until they are, state the
+gate decision explicitly in your report so it is at least visible in the transcript.
+**Never approve on the user's behalf at medium or high.**
 
 ## Step 6 — Report
 
@@ -84,7 +129,9 @@ verdict + top three drivers, and cost against budget. Keep it to a few lines.
 
 - **Evidence or silence.** Every judgement carries `confidence` and non-empty
   `evidence[]`. Below threshold → escalate, don't guess.
-- **Never do arithmetic the MCP server does.** Blast radius, risk scores, roll-up
-  and token counts come from tools. Paying a model to add numbers is a design error.
+- **Never do arithmetic a tool does.** Blast radius, risk scores, roll-up and token
+  counts come from `jspec`, not from you. Paying a model to add numbers is a design
+  error. Where the tool is not built yet, say the number is unavailable — never
+  estimate one and present it as measured.
 - **Read `memory/STATE.md` first** in a new session, per `CLAUDE.md`.
 - **No `ANTHROPIC_API_KEY`, ever.** If a step seems to need one, the design is wrong.
