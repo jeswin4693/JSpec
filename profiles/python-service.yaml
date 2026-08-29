@@ -1,0 +1,20 @@
+# A conventional Python service: src/ layout, pytest, ruff, mypy.
+#
+# One of two shipped examples. Read this one and profiles/playwright-e2e.yaml
+# together - they are deliberately unalike, so that neither reads as "the shape a
+# profile has to be". If a third kind of project cannot be expressed by writing a
+# file like these, that is a bug in the Profile contract, not in the project.
+
+name: python-service
+description: Python service with a src/ layout, pytest and ruff.
+
+languages: [python]
+
+source_dirs: [src/]
+test_dirs: [tests/]
+
+validation:
+  lint: ruff check .
+  format: ruff format --check .
+  typecheck: mypy src
+  test: pytest -q

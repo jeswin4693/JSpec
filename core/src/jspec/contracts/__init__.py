@@ -28,6 +28,7 @@ from jspec.contracts.base import (
 )
 from jspec.contracts.gate import Gate, GateDecision
 from jspec.contracts.plan import Plan, WorkPackage
+from jspec.contracts.profile import Profile, Validation
 from jspec.contracts.risk import Decision, RiskBand, RiskItem, Verdict
 from jspec.contracts.routing import Classification, Route
 from jspec.contracts.spec import (
@@ -41,6 +42,7 @@ from jspec.contracts.spec import (
 
 KINDS: dict[str, type[BaseModel]] = {
     "classification": Classification,
+    "profile": Profile,
     "spec": Spec,
     "plan": Plan,
     "work_package": WorkPackage,
@@ -78,6 +80,7 @@ __all__ = [
     "Id",
     "Plan",
     "Priority",
+    "Profile",
     "Requirement",
     "RiskBand",
     "RiskItem",
@@ -86,6 +89,7 @@ __all__ = [
     "Spec",
     "SuccessCriterion",
     "UserStory",
+    "Validation",
     "Verdict",
     "WorkPackage",
     "json_schema",

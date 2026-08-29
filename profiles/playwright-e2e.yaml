@@ -1,0 +1,27 @@
+# A Playwright end-to-end suite. There is no application code here at all - the
+# "source" IS the test suite, plus the page objects it drives.
+#
+# The second of two shipped examples, and the reason there are two: almost nothing
+# it sets matches profiles/python-service.yaml. Different language, different
+# layout, a source tree that is tests, and source_dirs overlapping test_dirs, which
+# is legal and normal here.
+
+name: playwright-e2e
+description: Playwright end-to-end suite driving a web application through page objects.
+
+languages: [typescript]
+
+# Page objects hold the locators; specs hold flow only. Both are "source" for the
+# purposes of change analysis - editing a page object is what breaks other specs.
+source_dirs:
+  - tests/
+  - page-objects/
+  - support/
+test_dirs: [tests/]
+
+validation:
+  lint: eslint .
+  typecheck: tsc --noEmit
+  # Serialised on purpose: parallel browser workers make failures non-reproducible,
+  # and a flaky signal is worse than a slow one when it gates a merge.
+  test: npx playwright test --workers=1

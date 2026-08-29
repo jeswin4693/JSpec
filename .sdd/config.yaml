@@ -173,11 +173,14 @@ routing:
   # and must not be restated here (constitution rule 2).
 
 # --- validation (§40) ------------------------------------------------------------
-# Project-native commands only. §40: do not invent commands without checking the repo.
-validation:
-  python:
-    typecheck: null # none configured yet
-    lint: ruff check core tests
-    format: ruff format --check core tests
-    test: pytest
-  # Per-domain runners belong in profiles/*.yaml, not here (constitution rule 20).
+# Deliberately empty. Validation commands are a per-project fact and live in
+# profiles/*.yaml, which is what constitution rule 20 (D-011) requires; this file
+# holds runtime policy that is true regardless of which project is loaded.
+#
+# This repo's own commands moved to profiles/jspec-self.yaml when C-25 landed. They
+# are not restated here - two copies of a command drift, and the one nobody runs is
+# the one that goes stale (constitution rule 2).
+profiles:
+  root: profiles
+  # No `default:` key. The active profile is chosen per invocation; a global default
+  # is how the wrong linter silently runs against the wrong repository.

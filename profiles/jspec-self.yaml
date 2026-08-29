@@ -1,0 +1,22 @@
+# JSpec's profile for JSpec. The commands here were previously in
+# .sdd/config.yaml under `validation.python`, where a comment already said they
+# belonged in a profile (constitution rule 20). Moved, not duplicated - two copies
+# would drift, and constitution rule 2 forbids the second one.
+#
+# Keeping this file means JSpec is exercised against a real profile from the day the
+# loader lands, rather than only against examples nothing runs.
+
+name: jspec-self
+description: This repository - the JSpec core, its contracts and its test suite.
+
+languages: [python]
+
+source_dirs: [core/src/]
+test_dirs: [tests/]
+
+validation:
+  lint: ruff check core tests
+  format: ruff format --check core tests
+  # No typecheck: mypy is not configured here yet. Omitted rather than set to a
+  # command that would fail - a profile states what is true, not what is aspired to.
+  test: pytest
