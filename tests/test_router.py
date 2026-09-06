@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 from jspec.router import (
     CONFIDENCE_FLOOR,
+    FILE_PATH,
     RepoState,
     Route,
     classify,
@@ -157,3 +158,62 @@ class TestSerialisation:
         c = classify("rename the timeout constant in config.py")
         assert c.signals
         assert all("+" in s for s in c.signals)
+
+
+class TestFilePathIsShapeNotVocabulary:
+    """`FILE_PATH` recognises a filename by its shape, not by a language list.
+
+    It used to enumerate ten extensions, which put domain knowledge in `core/`
+    (constitution rule 20) and silently failed on every language not listed. These
+    tests pin both halves of the replacement: what it must still match, and what it
+    must never match.
+    """
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "config.py",
+            "a.py",
+            "src/app.tsx",
+            "docker-compose.yml",
+            "Store.java",
+            "page-objects/m2m/navigation.ts",
+        ],
+    )
+    def test_it_still_matches_everything_the_old_list_did(self, text: str) -> None:
+        assert FILE_PATH.findall(text) == [text]
+
+    @pytest.mark.parametrize(
+        "text", ["main.rs", "README.md", "schema.json", "deploy.tf", "Model.kt"]
+    )
+    def test_it_now_matches_languages_the_old_list_missed(self, text: str) -> None:
+        """The point of the change: JSpec is meant to be domain-agnostic."""
+        assert FILE_PATH.findall(text) == [text]
+
+    def test_a_windows_path_matches_in_full(self) -> None:
+        """Regression guard. A first attempt at this pattern dropped the backslash
+        from the separator class, so a Windows path matched only its last segment
+        and the count of files named came out wrong."""
+        text = chr(92).join(["page-objects", "m2m", "navigation.ts"])
+        assert FILE_PATH.findall(text) == [text]
+
+    @pytest.mark.parametrize(
+        "text", ["e.g.", "i.e.", "etc.", "version 3.13", "v1.2.3", "U.S.A."]
+    )
+    def test_prose_and_version_numbers_are_not_files(self, text: str) -> None:
+        """A one-character suffix, or one starting with a digit, is not an extension.
+
+        This is what keeps the signal usable now that the extension list is gone.
+        """
+        assert FILE_PATH.findall(text) == []
+
+    def test_the_signal_counts_files_not_mentions(self) -> None:
+        """The bump fires on exactly one file named; two must not trigger it."""
+        assert len(FILE_PATH.findall("move helper from a.py to b.py")) == 2
+        assert "exactly one file named" not in " ".join(
+            classify("move the helper from a.py to b.py").signals
+        )
+
+    def test_one_named_file_still_pushes_toward_trivial(self) -> None:
+        signals = " ".join(classify("rename the constant in config.py").signals)
+        assert "exactly one file named" in signals

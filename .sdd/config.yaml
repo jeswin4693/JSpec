@@ -142,7 +142,12 @@ index:
   incremental: true
   hash_algorithm: sha256
   reindex_on: content_hash_change
-  languages: [python, typescript, javascript, tsx, jsx]
+  # No `languages:` key. Which languages to parse is a per-project fact and lives in
+  # profiles/*.yaml, which is what constitution rule 20 (D-011) requires. A list here
+  # would be a second source for one fact (rule 2) and would go stale: the grammar
+  # pack ships ~165 languages, so a hand-kept subset is drift waiting to happen. A
+  # profile naming a language the pack lacks is a runtime error with a clear message,
+  # not something a config list should pre-empt. Removed when C-06 landed (D-033).
 
 cache:
   root: .sdd/cache

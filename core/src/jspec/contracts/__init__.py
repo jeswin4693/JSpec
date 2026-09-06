@@ -27,6 +27,14 @@ from jspec.contracts.base import (
     Score1to5,
 )
 from jspec.contracts.gate import Gate, GateDecision
+from jspec.contracts.graph import (
+    FileSymbols,
+    Reference,
+    ReferenceKind,
+    Resolution,
+    Symbol,
+    SymbolKind,
+)
 from jspec.contracts.plan import Plan, WorkPackage
 from jspec.contracts.profile import Profile, Validation
 from jspec.contracts.risk import Decision, RiskBand, RiskItem, Verdict
@@ -49,6 +57,13 @@ KINDS: dict[str, type[BaseModel]] = {
     "risk_item": RiskItem,
     "verdict": Verdict,
     "gate": Gate,
+    # C-06's output. Registered because C-07 mirrors these two as its table rows,
+    # so one shape defines the contract, the schema and the columns. `FileSymbols`
+    # is not registered: it is the per-file container C-06 returns, and nothing
+    # downstream validates one on its own - the bar for a KINDS entry is a live
+    # consumer, not a plausible one.
+    "symbol": Symbol,
+    "reference": Reference,
 }
 
 
@@ -75,19 +90,25 @@ __all__ = [
     "Confidence",
     "Decision",
     "Evidence",
+    "FileSymbols",
     "Gate",
     "GateDecision",
     "Id",
     "Plan",
     "Priority",
     "Profile",
+    "Reference",
+    "ReferenceKind",
     "Requirement",
+    "Resolution",
     "RiskBand",
     "RiskItem",
     "Route",
     "Score1to5",
     "Spec",
     "SuccessCriterion",
+    "Symbol",
+    "SymbolKind",
     "UserStory",
     "Validation",
     "Verdict",

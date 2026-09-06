@@ -17,15 +17,16 @@ mean two detectors disagreeing.
 from __future__ import annotations
 
 import difflib
-import os
 from pathlib import Path
 
 import yaml
 from pydantic import ValidationError
 
 from jspec.contracts.profile import Profile
+from jspec.paths import RootNotFound, find_up
 
 PROFILE_SUFFIX = ".yaml"
+PROFILES_DIR_NAME = "profiles"
 
 
 class ProfileError(Exception):
@@ -35,30 +36,19 @@ class ProfileError(Exception):
 def profiles_dir(root: Path | None = None) -> Path:
     """Locate `profiles/`.
 
-    Resolution order, first hit wins:
-      1. the `root` argument - tests pass a tmp_path here
-      2. `$JSPEC_ROOT` - set by the plugin's .mcp.json
-      3. walk up from this file until a directory contains `profiles/`
-
-    Step 3 exists so the package works from a source checkout with no environment
-    set up, which is how it is run during development and in CI.
+    The `root` argument names the profiles directory itself, not the project root -
+    tests pass a tmp_path holding loose .yaml files. Everything else (`$JSPEC_ROOT`,
+    then walking up from this file) is the shared search in `jspec.paths`, which
+    `jspec.config` also uses; keeping a second copy of that walk here is how the two
+    would end up disagreeing about where the project is.
     """
     if root is not None:
         return Path(root)
 
-    env_root = os.environ.get("JSPEC_ROOT")
-    if env_root:
-        return Path(env_root) / "profiles"
-
-    for parent in Path(__file__).resolve().parents:
-        candidate = parent / "profiles"
-        if candidate.is_dir():
-            return candidate
-
-    raise ProfileError(
-        "cannot locate a profiles/ directory: no root argument, no $JSPEC_ROOT, "
-        f"and nothing found walking up from {Path(__file__).resolve()}"
-    )
+    try:
+        return find_up(PROFILES_DIR_NAME)
+    except RootNotFound as exc:
+        raise ProfileError(str(exc)) from exc
 
 
 def available(root: Path | None = None) -> list[str]:

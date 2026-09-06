@@ -32,12 +32,30 @@ import sys
 from typing import Any
 
 from jspec import tools
+from jspec.config import ConfigError
+from jspec.graph import ExtractError
 from jspec.profiles import ProfileError
 
 EXIT_OK = 0
 EXIT_ANSWER_IS_NO = 1
 EXIT_USAGE = 2
 EXIT_NOT_BUILT = 3
+
+
+def _use_utf8() -> None:
+    """Force UTF-8 on both streams, whatever the console codepage says.
+
+    Stdout is already safe - `json.dump` escapes non-ASCII by default - but stderr
+    is not, and an error message is where a real path is most likely to appear. On a
+    Windows cp1252 console `café/app.py` came back as `caf?/app.py`, which
+    breaks the rule every error message here is written to: name the file and the
+    fix. Mirrored in core/scripts/session_start.py, which cannot import this package.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError):  # not a reconfigurable stream
+            pass
 
 
 def _emit(payload: dict[str, Any]) -> None:
@@ -98,6 +116,55 @@ def cmd_validate(args: argparse.Namespace) -> int:
     result = tools.validate_artifact(args.kind, _read_payload(args.payload))
     _emit(result)
     return EXIT_OK if result["ok"] else EXIT_ANSWER_IS_NO
+
+
+def cmd_extract(args: argparse.Namespace) -> int:
+    """Run C-06 over a tree and print what it found.
+
+    Not one of the ten tools in `jspec.tools.REGISTRY`, and deliberately so: that
+    registry is the surface a *skill* may call, and the skill-facing graph tools
+    (`blast_radius`, `find_existing`) stay blocked until C-07 can resolve a name to
+    a definition. This command exists because C-06's acceptance criterion is that
+    every symbol's file and line can be spot-checked by hand, and a component with
+    no way to run it cannot be checked at all.
+    """
+    from pathlib import Path
+
+    from jspec.graph.extract import (
+        _language_by_extension,
+        extract_file,
+        extract_tree,
+    )
+    from jspec.profiles import load as load_profile
+
+    profile = load_profile(args.profile)
+    root = Path(args.root)
+    if not root.is_dir():
+        raise ValueError(f"{root} is not a directory")
+
+    if args.file:
+        target = root / args.file
+        spec = _language_by_extension(profile.languages).get(target.suffix)
+        if spec is None:
+            raise ValueError(
+                f"profile {profile.name!r} has no language that reads "
+                f"{target.suffix!r}; it declares {profile.languages}"
+            )
+        rows = [extract_file(target, spec, root)]
+        payload: dict[str, Any] = {
+            "root": root.resolve().as_posix(),
+            "profile": profile.name,
+            "files": [r.model_dump(mode="json") for r in rows],
+        }
+        _emit(payload)
+        return EXIT_OK
+
+    report = extract_tree(root, profile)
+    payload = report.to_dict()
+    if args.symbols:
+        payload["rows"] = [f.model_dump(mode="json") for f in report.files]
+    _emit(payload)
+    return EXIT_OK
 
 
 def cmd_tools(_: argparse.Namespace) -> int:
@@ -168,6 +235,36 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("payload", help="Path to a JSON file, or - for stdin.")
     validate.set_defaults(func=cmd_validate)
 
+    extract = sub.add_parser(
+        "extract",
+        help="Parse a tree into symbols and references (C-06).",
+        description="Read source as structure. Prints a summary; --symbols adds rows.",
+    )
+    extract.add_argument(
+        "root",
+        nargs="?",
+        default=".",
+        help="Root folder to index. Every sub-folder under it is walked (D-032).",
+    )
+    extract.add_argument(
+        "--profile",
+        required=True,
+        help="Profile name. Supplies the languages and the directories to walk.",
+    )
+    extract.add_argument(
+        "--file",
+        default=None,
+        metavar="PATH",
+        help="Root-relative path. Extract only this file, and print every row - "
+        "the fast way to check a symbol's line by hand.",
+    )
+    extract.add_argument(
+        "--symbols",
+        action="store_true",
+        help="Include every symbol and reference, not just the totals.",
+    )
+    extract.set_defaults(func=cmd_extract)
+
     listing = sub.add_parser(
         "tools",
         help="All ten tools and what each is waiting on.",
@@ -179,6 +276,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _use_utf8()
     args = build_parser().parse_args(argv)
     try:
         return args.func(args)
@@ -187,6 +285,11 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_NOT_BUILT
     except ProfileError as exc:
         print(f"profile error: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    except (ExtractError, ConfigError) as exc:
+        # Both mean the run could not start honestly - an unsupported language, a
+        # missing grammar, unreadable exclusion rules. None of them is a "no".
+        print(f"error: {exc}", file=sys.stderr)
         return EXIT_USAGE
     except (ValueError, KeyError) as exc:
         # `str(KeyError(msg))` is `repr(msg)`, so it arrives wrapped in quotes. Read

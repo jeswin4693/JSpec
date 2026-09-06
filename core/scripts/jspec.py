@@ -23,9 +23,22 @@ from __future__ import annotations
 import pathlib
 import sys
 
-SRC = pathlib.Path(__file__).resolve().parents[1] / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
+HERE = pathlib.Path(__file__).resolve().parent
+SRC = HERE.parent / "src"
+
+# Drop this script's own directory. Python puts it at the front of sys.path, and it
+# holds a file named jspec.py - which shadows the jspec *package*, so `import
+# jspec.cli` resolves to this file and it imports itself.
+sys.path[:] = [p for p in sys.path if pathlib.Path(p or ".").resolve() != HERE]
+
+# Front, not merely present. An editable install puts core/src on the path already,
+# further down; the earlier version of this file checked only whether it was there
+# at all and skipped the insert, leaving the script's own directory ahead of it. The
+# launcher then worked only while the package was NOT installed.
+source = str(SRC)
+if source in sys.path:
+    sys.path.remove(source)
+sys.path.insert(0, source)
 
 # The import must follow the sys.path insertion above, not precede it.
 from jspec.cli import main

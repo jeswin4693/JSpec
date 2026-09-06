@@ -68,7 +68,16 @@ STACK_TRACE = re.compile(
     r"\w+Error:|\w+Exception:|expect\(.+\)\.to|Timeout \d+ms exceeded)",
     re.MULTILINE,
 )
-FILE_PATH = re.compile(r"\b[\w./\\-]+\.(?:py|ts|tsx|js|cs|java|go|rb|sql|ya?ml)\b")
+# Shape, not vocabulary: a stem, optional path segments, then a 2-6 character
+# extension beginning with a letter. The previous version enumerated ten
+# languages, which put domain knowledge in core/ (constitution rule 20) and
+# silently failed to recognise every language that was not on the list. The
+# length floor on the extension is what keeps prose out: "e.g.", "i.e." and
+# "U.S.A." have one-character suffixes, and requiring a leading letter rejects
+# "3.13" and "v1.2.3". A method call such as `obj.save` does still match; the
+# bump it earns is toward T-0, which is the right direction for a prompt naming
+# one small thing, and fix or feature vocabulary in the same prompt outweighs it.
+FILE_PATH = re.compile(r"\b[\w-]+(?:[./\\][\w-]+)*\.[A-Za-z][A-Za-z0-9]{1,5}\b")
 
 FIX_WORDS = re.compile(
     r"\b(fix|failing|fails|failed|broken|break(?:ing)?|bug|error|crash|"

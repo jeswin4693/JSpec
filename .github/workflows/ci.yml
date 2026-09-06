@@ -37,7 +37,10 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install ./core[dev]
+          # `graph` is not optional in CI: C-06's tests parse real source, and
+          # without the grammars they would skip rather than fail, which is the
+          # quietest way for an extractor to stop working.
+          python -m pip install ./core[dev,graph]
 
       - name: Lint
         run: ruff check core tests
@@ -47,6 +50,27 @@ jobs:
 
       - name: Test
         run: pytest
+
+      - name: The extractor reads this repository (C-06)
+        # An extractor that silently returns nothing passes every unit test that
+        # only checks shapes. This asserts it found real symbols in a real tree,
+        # read every file it claimed to, and separated the sub-folders (D-032).
+        run: |
+          python core/scripts/jspec.py extract --profile jspec-self > extract.json
+          python -c "
+          import json, sys
+          r = json.load(open('extract.json'))
+          problems = []
+          if r['symbols'] < 100:
+              problems.append(f\"only {r['symbols']} symbols found\")
+          if r['files_unreadable']:
+              problems.append(f\"unreadable: {r['unreadable']}\")
+          if r['files_with_syntax_errors']:
+              problems.append(f\"syntax errors: {r['syntax_errors']}\")
+          if r['modules'] != ['core', 'tests']:
+              problems.append(f\"modules {r['modules']}, expected ['core', 'tests']\")
+          sys.exit('; '.join(problems)) if problems else print('ok', r['symbols'], 'symbols')
+          "
 
   artifacts:
     # Config files are load-bearing: a malformed plugin manifest or template

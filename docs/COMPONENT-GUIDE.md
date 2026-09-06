@@ -221,7 +221,12 @@ design.
 
 ---
 
-## C-25 · Profile engine ⬜ not started · ~250 lines · **build first**
+## C-25 · Profile engine ✅ done · 258 lines + 21 tests
+
+> **As built (D-030):** shipped deliberately thin. `extends` / override
+> resolution, `risk_signals` and `templates` are all deferred until a component
+> actually reads them - an inheritance system with one user is a configuration
+> language nobody asked for. Three profiles ship; two CI gates enforce them.
 
 **In one line:** The one place where facts about a specific project are allowed to live.
 
@@ -354,7 +359,12 @@ having no conventions at all, because now it is automated.
 
 ---
 
-## C-05 · Tool surface 🟡 stub · 127 → ~400 lines · **blocks everything**
+## C-05 · Tool surface ✅ done · 480 lines + 38 tests
+
+> **As built (D-031):** one `jspec` command, not per-skill scripts. 3 of the 10
+> tools are live; the other 7 raise `ToolUnavailable` naming their blocker. The
+> third live tool is `plan_chain`, **not** the `blast_radius` named below -
+> that needs C-07, which did not exist. Deviation recorded rather than glossed.
 
 **In one line:** How the model-facing side actually calls the Python side.
 
@@ -403,7 +413,14 @@ documentation and validation, which is why C-01 had to come first.
 
 ---
 
-## C-06 · Symbol extractor ⬜ not started · ~300 lines
+## C-06 · Symbol extractor ✅ done · 943 lines + 45 tests
+
+> **As built (D-033, D-034):** four languages ship. Every grammar node-type name
+> lives in `core/src/jspec/graph/languages.yaml`, so no module in `core/src`
+> names a language and adding one is a data change. Every reference carries a
+> `resolution` - `exact`, `name_only` or `unresolved` - recording how firmly the
+> syntax pinned its target down, rather than dropping uncertain edges or
+> over-linking them. Run it with `jspec extract --profile <name>`.
 
 **In one line:** Reads source code properly, instead of treating it as text.
 

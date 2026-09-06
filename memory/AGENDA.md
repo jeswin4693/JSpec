@@ -18,17 +18,17 @@ D-027). Where an example is needed below it is labelled as an example.
 
 | | Count | Which |
 |---|---|---|
-| ✅ Done | **6** | C-01, C-02, C-03, C-04, C-05, C-25 |
+| ✅ Done | **7** | C-01, C-02, C-03, C-04, C-05, C-06, C-25 |
 | 🟡 Partial / stub | **3** | C-12, C-14, C-16 |
-| ⬜ Not started | **18** | everything else |
+| ⬜ Not started | **17** | everything else |
 | **Total** | **27** | 9 groups, 6 milestones |
 
-**Right now:** **M1 complete.** C-25 and C-05 both landed 2026-08-29 — 99 tests green.
-JSpec runs: `jspec classify` / `plan-chain` / `validate` / `tools` work end to end, and
-the router skill calls them. 3 of 10 tools are built; the other 7 refuse rather than
-guess, each naming the component it waits on.
-**Next:** M2 = C-06 → C-07 → C-08 → C-26. Scope settled 2026-08-29 (D-032): one root
-folder, every sub-folder indexed, cross-folder calls followed.
+**Right now:** **M2 started — C-06 landed 2026-09-06.** 173 tests green. JSpec parses
+its own source: `jspec extract --profile jspec-self` returns 272 symbols and 975
+references across 25 files, separated by sub-folder (D-032). Every language fact lives
+in `graph/languages.yaml`, so no module in `core/src` names a language.
+**Next:** **C-07 symbol store** — SQLite on content hash, `module` column from the first
+migration, plus full-text search. Then C-08 blast radius, then C-26.
 
 **Legend:** `[x]` done · `[~]` partial or stub · `[ ]` not started · `[!]` blocked on input
 
@@ -53,11 +53,11 @@ saying what changed. Never renumber a component ID — they are referenced from
 - [x] **C-02 · Router** — Reads a request and decides how much process it deserves
       (trivial / fix / feature / sweep), then sets the token and question budget for the
       run. No model call.
-      · 222 ln · needs: C-01 · *teaches: when NOT to call a model*
+      · 231 ln · needs: C-01 · *teaches: when NOT to call a model*
 
 - [x] **C-03 · Memory** — Continuity across chats: a small auto-loaded protocol, a
       current-state file, an append-only history, and this agenda.
-      · ~550 ln · needs: — · *teaches: agent memory architecture*
+      · ~550 ln + 9 hook tests · needs: — · *teaches: agent memory architecture*
 
 - [x] **C-04 · Guardrails** — The constitution (rules), `config.yaml` (knobs) and CI
       (enforcement), including the check that fails the build if an API key appears.
@@ -93,10 +93,15 @@ saying what changed. Never renumber a component ID — they are referenced from
 
 ## Group 3 · Repo intelligence — *where it first becomes worth using*
 
-- [ ] **C-06 · Symbol extractor** — Parse every source file into symbols — functions,
-      classes, methods, imports, calls — each with its file and line. Language-agnostic
-      via tree-sitter; which languages to load comes from the profile.
-      · ~300 ln · needs: — · *teaches: parsing beats text processing; the unit you index decides everything*
+- [x] **C-06 · Symbol extractor** — Parses source into symbols and edges via
+      tree-sitter, each with its exact file and line. Four languages ship. Every
+      node-type name lives in `graph/languages.yaml` (D-033), so adding a language is a
+      data change and `core/` names no language. Each edge carries a `resolution`
+      (`exact` / `name_only` / `unresolved`) recording how firmly the syntax pinned its
+      target down — a member call is kept *and* labelled rather than dropped or
+      over-linked. Syntax errors are flagged, not fatal: whatever parsed is still
+      returned.
+      · 943 ln + 45 tests · needs: — · *teaches: parsing beats text processing; the unit you index decides everything*
 
 - [ ] **C-07 · Symbol store** — A SQLite index of every symbol, refreshed only for files
       whose content hash actually changed. Plus full-text search.
@@ -201,7 +206,7 @@ saying what changed. Never renumber a component ID — they are referenced from
       a route, a chain and a budget; `jspec validate` rejects a malformed artifact and
       names every field. **2 components, both done.**
 
-- [ ] **M2 · It knows the repo — stop here and use it** — `C-06` → `C-07` → `C-08` → `C-26`
+- [ ] **M2 · It knows the repo — stop here and use it** — ~~`C-06`~~ → `C-07` → `C-08` → `C-26`
       Blast radius works. "What breaks if I change this?" answered completely, in
       milliseconds. **This alone is worth the project.** Use it for two weeks before
       building more — what you learn will change what you build next. **4 components.**
@@ -232,6 +237,7 @@ saying what changed. Never renumber a component ID — they are referenced from
 | 3 | How does headless `claude -p` authenticate inside a CI pipeline? | CI rollout only |
 | 4 | Directory-management access in the Aptean Enterprise org | public marketplace only |
 
-Settled: code-graph scope (D-032, one root + all sub-folders) · C-05 shape (D-025,
+Settled: language data lives beside the extractor, not in config or profiles (D-033) ·
+code-graph scope (D-032, one root + all sub-folders) · C-05 shape (D-025,
 bundled scripts) · golden set method (D-026, reconstruct then correct) · no frameworks / no Ollama (D-024) · domain neutrality gets components
 (D-027) · deliver in chat (D-028).

@@ -547,3 +547,108 @@ module. Blast radius (C-08) must report which sub-folder each caller lives in, s
 two files next to the one you are editing". Note this is a **single root**, not several
 separately-cloned repositories: cross-repository indexing is not in scope and should be
 raised as a new question if it ever is.
+
+## D-033 · 2026-09-06 · Language reading rules are data shipped beside the extractor
+
+C-06 needs a table of grammar node types per language. Three places could hold it, and
+two of them are wrong:
+
+- **`.sdd/config.yaml`** already had `index.languages: [python, typescript, ...]`. It is
+  **removed.** Which languages a project uses is a per-project fact, and constitution
+  rule 20 (D-011) assigns per-project facts to `profiles/*.yaml`, where every profile
+  already declares `languages:`. Two authorities for one fact is rule 2, and the copy
+  nobody edits is the one that goes stale. Nothing read the config key — verified before
+  removing it.
+- **`profiles/*.yaml`** is wrong for the node-type table itself. A profile holds facts
+  about one *project*; node types are facts about a *language*, identical for every
+  project ever written in it. Putting them there copies the same table into every
+  profile.
+- **`core/src/jspec/graph/languages.yaml`** — where it went. Shipped data, one copy,
+  loaded by the extractor.
+
+The split, stated once: **the profile says WHICH languages a project uses; this file says
+HOW to read one.**
+
+It is YAML rather than a Python dict for a specific reason. `check_domain_neutrality.py`
+screens *tool* names, so a node-type table in a `.py` module would have passed the gate
+while being exactly the erosion the gate exists to stop ("one `if language == ...` at a
+time"). Keeping it as data makes the rule literally true: no module in `core/src` names a
+language, and `tests/test_graph.py::test_no_module_in_core_names_a_language` enforces it
+independently of the CI script.
+
+**Consequence:** supporting a new language is a YAML block, with no new logic. The
+acceptance criterion "adding a language requires a profile change, not a code change" is
+read honestly: adding a language *to a project* is a profile edit; teaching JSpec a
+language it has never seen is a data edit. Neither is a code change.
+
+## D-034 · 2026-09-06 · A reference records how firmly the syntax pinned its target down
+
+`user.save()` cannot be resolved to a definite `save` without type inference. The two
+tempting options are both dishonest: drop the edge, which understates blast radius, or
+link it to every `save` in the repository, which drowns the answer.
+
+Instead every `Reference` carries `resolution`:
+
+- `exact` — a single bare identifier: `foo()`, `import a.b`
+- `name_only` — a member on an unknown receiver: `user.save()`. The final name is known,
+  the owner is not.
+- `unresolved` — nothing usable was named: `handlers[i]()`. Kept, not dropped, so the
+  edge count stays honest; the recorded name is the syntactic form.
+
+This is a statement about **syntax**, not about the repository: C-06 sees one file at a
+time. C-07 and C-08 combine it with their own lookup, and C-08 can then report "7 callers
+certain, 3 possible" instead of one undifferentiated list.
+
+It is the same rule C-08 already commits to with its depth limit, generalised: **a partial
+answer must never be shaped like a complete one.** Owner chose the defaults; this records
+which default was taken and why the other two were refused.
+
+## D-035 · 2026-09-06 · The router recognises a filename by shape, not by a language list
+
+`router.py`'s `FILE_PATH` regex enumerated ten extensions
+(`py|ts|tsx|js|cs|java|go|rb|sql|ya?ml`). That is domain knowledge in `core/`, which
+constitution rule 20 (D-011) forbids, and which `check_domain_neutrality.py` misses
+because it screens *tool* names and these are extensions. Found by C-06's neutrality
+test, deferred at the time as C-02's call, then fixed on the owner's instruction to fix
+anything showing issues.
+
+Replaced with a **shape**: a stem, optional path segments, then a 2-6 character
+extension beginning with a letter.
+
+The rejected alternative was to read extensions from `graph/languages.yaml`. That would
+have *narrowed* the regex to the four shipped languages, so a prompt naming `Store.java`
+would have stopped registering — a regression dressed as a cleanup.
+
+Verified against a battery before adopting: **zero regressions** on everything the old
+list matched (including Windows backslash paths), six new languages recognised
+(`.rs .md .json .tf .sh .kt`), and prose correctly rejected — `e.g.`, `i.e.`, `U.S.A.`,
+`3.13`, `v1.2.3` all fail, because a one-character suffix or one starting with a digit
+is not an extension.
+
+**Known and accepted:** `obj.save` now matches. The bump it earns is toward T-0, which
+is the right direction for a prompt naming one small thing, and any fix or feature
+vocabulary in the same prompt outweighs it. Pinned in `tests/test_router.py` so the
+trade-off is measurable rather than hidden.
+
+## D-036 · 2026-09-06 · Every entry point forces UTF-8 on its own streams
+
+The SessionStart hook was **silently failing on Windows**. Claude Code captures its
+stdout through a pipe; Python then encodes with the locale codepage (cp1252 here); the
+memory files are full of arrows and bullets; the first one raised `UnicodeEncodeError`;
+the top-level handler swallowed it and printed "could not run". **Every session on this
+machine had been starting with no memory loaded** — the exact failure C-03 exists to
+prevent, invisible because nothing tested the hook.
+
+Both entry points now call a local `_use_utf8()` that reconfigures stdout and stderr.
+`jspec.cli` needed it too: its stdout was already safe (`json.dump` escapes non-ASCII by
+default) but stderr was not, and `café/app.py` came back as `caf?/app.py`, breaking the
+rule every error message here is written to — name the file and the fix.
+
+The helper is **duplicated on purpose**. `hooks.json` runs the hook with bare `python`,
+so it cannot import the package; making it able to would break the requirement that it
+works in a checkout with nothing installed. Four lines of stdlib boilerplate with no
+logic to drift is the cheaper of the two evils, and both copies say so.
+
+**The real lesson is the test gap, not the encoding.** `tests/test_memory_hook.py` now
+runs the hook as a subprocess under cp1252, ascii and utf-8. Verified in both
+directions: reverting the fix fails four tests.

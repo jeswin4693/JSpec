@@ -1,0 +1,162 @@
+# How to read each language JSpec supports. Shipped data, not per-project config.
+#
+# WHY THIS IS A YAML FILE AND NOT A PYTHON DICT
+# Constitution rule 20 (D-011) keeps domain knowledge out of core/, and
+# core/scripts/check_domain_neutrality.py enforces it. A table of grammar node types
+# in a .py module would technically pass that gate - it screens tool names, not
+# language names - while being exactly the erosion the gate exists to stop. Keeping
+# it here makes the rule literally true: no module in core/src names a language, and
+# supporting a new one is a data change with no new logic.
+#
+# WHY NOT IN profiles/*.yaml
+# A profile holds facts about one *project*. These are facts about a *language* -
+# the node types below are identical for every project ever written in it. Putting
+# them in profiles would copy the same table into every profile and guarantee drift.
+# The split: the profile says WHICH languages a project uses; this file says HOW to
+# read one.
+#
+# TO ADD A LANGUAGE
+# Add a block below. `grammar` must be a name tree-sitter-language-pack knows.
+# Node-type names come from that grammar's node-types.json, not from guesswork -
+# a wrong name silently extracts nothing, so verify against a real file.
+#
+# DELIBERATELY NOT EXTRACTED (each waits on a component that would read it):
+#   - variables and constants: an order of magnitude more rows, and they almost
+#     never answer "what breaks if I change this"
+#   - export markers: C-08 traverses calls and imports; nothing reads exported-ness
+#   - type annotations: that is inference, and C-06 is a reader, not a type checker
+
+version: 1
+
+languages:
+  python:
+    grammar: python
+    extensions: [".py", ".pyi"]
+    identifier_nodes: [identifier]
+    # `user.save()` - the final name lives in the `attribute` field.
+    member:
+      nodes: [attribute]
+      name_field: attribute
+    definitions:
+      - node: function_definition
+        kind: function
+        name_field: name
+      - node: class_definition
+        kind: class
+        name_field: name
+    calls:
+      - node: call
+        target_field: function
+    imports:
+      # `import a.b` and `import a.b as c` - repeated, so every name is collected.
+      - node: import_statement
+        module_field: name
+        # `import a.b as c` wraps the path one level deeper; without this the edge
+        # would record the text "a.b as c" as if it were a module name.
+        alias_node: aliased_import
+        alias_name_field: name
+      # `from a.b import c` - the edge is to the module, which is what C-08 follows.
+      - node: import_from_statement
+        module_field: module_name
+
+  typescript:
+    grammar: typescript
+    extensions: [".ts"]
+    identifier_nodes: [identifier, property_identifier, type_identifier]
+    member:
+      nodes: [member_expression]
+      name_field: property
+    definitions:
+      - node: function_declaration
+        kind: function
+        name_field: name
+      - node: class_declaration
+        kind: class
+        name_field: name
+      - node: abstract_class_declaration
+        kind: class
+        name_field: name
+      - node: method_definition
+        kind: method
+        name_field: name
+      - node: interface_declaration
+        kind: interface
+        name_field: name
+      # `const handler = () => {}` is how a large share of real code declares a
+      # function. Without this rule a modern codebase indexes almost empty.
+      - node: variable_declarator
+        kind: function
+        name_field: name
+        value_field: value
+        value_types: [arrow_function, function_expression]
+    calls:
+      - node: call_expression
+        target_field: function
+    imports:
+      # The module path is a quoted string node; the quotes are not part of it.
+      - node: import_statement
+        module_field: source
+        strip_quotes: true
+
+  tsx:
+    grammar: tsx
+    extensions: [".tsx"]
+    identifier_nodes: [identifier, property_identifier, type_identifier]
+    member:
+      nodes: [member_expression]
+      name_field: property
+    definitions:
+      - node: function_declaration
+        kind: function
+        name_field: name
+      - node: class_declaration
+        kind: class
+        name_field: name
+      - node: method_definition
+        kind: method
+        name_field: name
+      - node: interface_declaration
+        kind: interface
+        name_field: name
+      - node: variable_declarator
+        kind: function
+        name_field: name
+        value_field: value
+        value_types: [arrow_function, function_expression]
+    calls:
+      - node: call_expression
+        target_field: function
+    imports:
+      - node: import_statement
+        module_field: source
+        strip_quotes: true
+
+  javascript:
+    grammar: javascript
+    extensions: [".js", ".jsx", ".mjs", ".cjs"]
+    identifier_nodes: [identifier, property_identifier]
+    member:
+      nodes: [member_expression]
+      name_field: property
+    definitions:
+      - node: function_declaration
+        kind: function
+        name_field: name
+      - node: class_declaration
+        kind: class
+        name_field: name
+      - node: method_definition
+        kind: method
+        name_field: name
+      - node: variable_declarator
+        kind: function
+        name_field: name
+        value_field: value
+        value_types: [arrow_function, function_expression]
+    calls:
+      - node: call_expression
+        target_field: function
+    imports:
+      - node: import_statement
+        module_field: source
+        strip_quotes: true

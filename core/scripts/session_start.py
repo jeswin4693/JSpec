@@ -16,6 +16,29 @@ MAX_STATE_CHARS = 4000
 MAX_JOURNAL_CHARS = 1200
 
 
+def _use_utf8() -> None:
+    """Force UTF-8 on stdout, whatever the console codepage says.
+
+    Claude Code captures this hook's stdout through a pipe, and on Windows Python
+    then encodes with the locale codepage - cp1252 here. The memory files are full
+    of arrows and bullets, so the very first one raised UnicodeEncodeError and the
+    hook degraded to "could not run": **a new session silently started with no
+    memory loaded**, which is the one failure this component exists to prevent.
+
+    Duplicated in `jspec.cli` rather than shared, and deliberately: hooks.json runs
+    this file with bare `python`, so it cannot import the package. A four-line
+    stdlib call with no logic in it is the cheaper of the two evils.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError):  # not a reconfigurable stream
+            pass
+
+
+_use_utf8()
+
+
 def project_root() -> Path:
     """JSPEC_ROOT if the hook set it, else walk up looking for memory/STATE.md."""
     env = os.environ.get("JSPEC_ROOT")

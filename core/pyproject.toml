@@ -2,7 +2,11 @@
 name = "jspec"
 version = "0.1.0"
 description = "AI-native spec-driven development. Deterministic core for the JSpec Claude Code plugin."
-readme = "../README.md"
+# No `readme` key. It pointed at ../README.md, which hatchling rejects as outside
+# the project directory - that, not the broken pip, is why `pip install -e core`
+# had never actually succeeded. A core/README.md would be a second copy of the root
+# one and drift (constitution rule 2); this package is installed editable as the
+# plugin's backend and is never published, so it has no use for a long description.
 # 3.14 is deliberately excluded: tree-sitter bindings and sqlite-vec wheels lag
 # there, which means building from source. See DECISIONS.md D-013.
 requires-python = ">=3.12,<3.14"
