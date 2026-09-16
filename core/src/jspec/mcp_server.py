@@ -75,13 +75,20 @@ def blast_radius(symbol: str, path: str | None = None) -> dict:
     raise tools.unavailable("blast_radius")
 
 
-def find_existing(intent: str) -> dict:
+def find_existing(
+    intent: str,
+    root: str = ".",
+    kind: str | None = None,
+    module: str | None = None,
+) -> dict[str, Any]:
     """Existing methods/helpers/locators that already do this.
 
     Reuse enforcement: answers "does this already exist?" before a line is written,
-    in milliseconds instead of a manual read-through.
+    in milliseconds instead of a manual read-through. Built by C-07 - exact name
+    lookup first, full-text prefix search only as a fallback, and the `mode` field
+    says which one answered.
     """
-    raise tools.unavailable("find_existing")
+    return tools.find_existing(intent, root=root, kind=kind, module=module)
 
 
 def score_risk(work_packages: list[dict]) -> dict:

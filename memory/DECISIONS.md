@@ -652,3 +652,61 @@ logic to drift is the cheaper of the two evils, and both copies say so.
 **The real lesson is the test gap, not the encoding.** `tests/test_memory_hook.py` now
 runs the hook as a subprocess under cp1252, ascii and utf-8. Verified in both
 directions: reverting the fix fails four tests.
+
+## D-037 · 2026-09-16 · The symbol index lives in JSpec's `.sdd/index`, one database per root
+
+`.sdd/config.yaml` already said `index.root: .sdd/index`, but not *whose* `.sdd`. The
+first tree JSpec indexed that was not itself — the Made2Manage suite — made the question
+real, because that repository has no `.sdd/` at all.
+
+**Settled: JSpec's own `.sdd/index/`, one SQLite file per indexed root, named
+`<folder>-<8 hex of the absolute path>.db`.** Never inside the tree being read.
+
+- Indexing a repository must not add an untracked 67 MB binary to someone's working
+  tree. `jspec extract` was read-only with respect to its target and `jspec index`
+  stays that way. Master plan §4.12–14 forbids modifying unrelated files; a cache
+  written into another team's checkout is exactly that.
+- The digest keeps two checkouts of the same repository apart; the folder name keeps the
+  directory listing readable. Deterministic, so the same root always reopens the same
+  index rather than silently starting a second one.
+- Relative `index.root` resolves against the directory holding `.sdd/`, never the
+  current working directory — a cache that moves when you `cd` is a cache that gets
+  rebuilt for no reason.
+
+Enforced by a CI gate that asserts the positive (the store is under `.sdd/index`) and
+then that no `*.db` exists anywhere else in the tree. The obvious check — "git sees no
+new file" — is worthless here: `.sdd/index/` is gitignored, so a database dropped
+anywhere ignored is invisible to git by construction.
+
+`.gitignore` gained `.sdd/index/`, `.sdd/cache/`, `.sdd/traces/`, `.sdd/metrics/` and
+`.sdd/gates.jsonl`. The pre-existing entries pointed at `.jspec/`, the name D-019
+replaced, so nothing had been ignored since; the old lines stay because
+`record_preference` still has no agreed home and `skills/router/SKILL.md` names `.jspec/`.
+
+## D-038 · 2026-09-16 · The store holds edges, not traversal; full text covers names, not bodies
+
+Two scope questions, answered once so C-08 and C-09 inherit them.
+
+**References are stored, with `module` and `resolution`, from the first migration.**
+They are 96% of the rows (199,615 of 208,526 on the M2M suite) and nothing queries them
+yet — C-08 does. Storing them later would mean re-reading every file in every repository
+the tool has ever seen, which is the same argument D-032 made for `module`. Measured
+cost of keeping them: 67.5 MB, about 3.2× the size of the source indexed, in a file that
+is disposable by design.
+
+**Traversal is not in the store.** One hop is a query; the transitive closure, the cycle
+guard and the reported depth limit are C-08's. So `blast_radius`'s registry entry moved
+from "blocked by C-07" to "blocked by C-08" rather than becoming ready — a one-hop answer
+presented as a blast radius would be precisely the partial-answer-shaped-like-a-complete-
+one that D-034 refuses.
+
+**Full-text search covers `name`, `qualified_name` and `file` — not source bodies.**
+Searching source text is C-09's lexical rung, where ripgrep already does it better, and
+indexing bodies would multiply the database for a capability that arrives later anyway.
+Every word becomes a prefix term, so `ensureAva` finds `ensureAvaTaxEnabled`.
+
+Deferred with its reason recorded: a **stat-based pre-filter** (size + mtime as a cheap
+"might have changed" hint before hashing, the other half of git's trick). Measured need —
+a no-change re-index of 1,885 files costs 1.9–2.4 s, against the ~1 s the component guide
+asked for, and the floor is the walk plus a full read of every file. It is an
+optimisation with a correctness trap in it, so it waits until the cost is felt.

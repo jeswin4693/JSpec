@@ -18,17 +18,21 @@ D-027). Where an example is needed below it is labelled as an example.
 
 | | Count | Which |
 |---|---|---|
-| ✅ Done | **7** | C-01, C-02, C-03, C-04, C-05, C-06, C-25 |
+| ✅ Done | **8** | C-01, C-02, C-03, C-04, C-05, C-06, C-07, C-25 |
 | 🟡 Partial / stub | **3** | C-12, C-14, C-16 |
-| ⬜ Not started | **17** | everything else |
+| ⬜ Not started | **16** | everything else |
 | **Total** | **27** | 9 groups, 6 milestones |
 
-**Right now:** **M2 started — C-06 landed 2026-09-06.** 173 tests green. JSpec parses
-its own source: `jspec extract --profile jspec-self` returns 272 symbols and 975
-references across 25 files, separated by sub-folder (D-032). Every language fact lives
-in `graph/languages.yaml`, so no module in `core/src` names a language.
-**Next:** **C-07 symbol store** — SQLite on content hash, `module` column from the first
-migration, plus full-text search. Then C-08 blast radius, then C-26.
+**Right now:** **M2 half done — C-07 landed 2026-09-16.** 204 tests green. JSpec now
+*remembers* what it parsed: the Made2Manage suite (1,885 files, 8,911 symbols, 199,615
+references) indexes in 10.9 s and **re-indexes in 1.9 s having parsed nothing**, and an
+exact symbol lookup against it costs 0.53 ms. Content hashes, never timestamps (D-037,
+D-038). `find_existing` is the fourth ready tool; `blast_radius` now waits on C-08, not
+C-07.
+**Next:** **C-08 blast radius** — transitive closure over the stored edges, cycle-safe,
+depth-limited with the depth reported, and it must split "certain" from "possible":
+**72% of the M2M graph is `name_only`**, so a bare number would be mostly guesswork.
+Then C-26, then stop and use M2.
 
 **Legend:** `[x]` done · `[~]` partial or stub · `[ ]` not started · `[!]` blocked on input
 
@@ -103,9 +107,13 @@ saying what changed. Never renumber a component ID — they are referenced from
       returned.
       · 943 ln + 45 tests · needs: — · *teaches: parsing beats text processing; the unit you index decides everything*
 
-- [ ] **C-07 · Symbol store** — A SQLite index of every symbol, refreshed only for files
-      whose content hash actually changed. Plus full-text search.
-      · ~250 ln · needs: C-06 · *teaches: incremental indexing, content addressing*
+- [x] **C-07 · Symbol store** — A SQLite index of every symbol *and every edge*, refreshed
+      only for files whose content hash actually changed, plus FTS5 search over names.
+      One database per indexed root, in JSpec's own `.sdd/index`, never in the repository
+      being read (D-037). Traversal deliberately left to C-08 (D-038). Proven, not
+      asserted: the extractor is injected so a test can count parses, and CI indexes this
+      repo twice and fails if the second run parses a single file.
+      · 674 ln + 33 tests · needs: C-06 · *teaches: incremental indexing, content addressing*
 
 - [ ] **C-08 · Blast radius** — "Who calls this, and who calls them?" — the transitive
       closure over the call and import graph. Change a shared thing, get the complete
@@ -206,7 +214,7 @@ saying what changed. Never renumber a component ID — they are referenced from
       a route, a chain and a budget; `jspec validate` rejects a malformed artifact and
       names every field. **2 components, both done.**
 
-- [ ] **M2 · It knows the repo — stop here and use it** — ~~`C-06`~~ → `C-07` → `C-08` → `C-26`
+- [ ] **M2 · It knows the repo — stop here and use it** — ~~`C-06`~~ → ~~`C-07`~~ → `C-08` → `C-26`
       Blast radius works. "What breaks if I change this?" answered completely, in
       milliseconds. **This alone is worth the project.** Use it for two weeks before
       building more — what you learn will change what you build next. **4 components.**

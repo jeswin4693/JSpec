@@ -3,8 +3,8 @@
 > Always describes **now**. Overwrite it; don't append history here.
 > History goes in `journal/`, decisions in `DECISIONS.md`.
 
-**Last updated:** 2026-09-06 (C-06 built, then a fix pass; **M2 started**)
-**Phase:** 1 — repo intelligence, ~25% complete
+**Last updated:** 2026-09-16 (C-07 symbol store built; M2 half done)
+**Phase:** 1 — repo intelligence, ~50% complete
 **Unit of planning:** the **27-component checklist in `memory/AGENDA.md`** (D-023, D-027),
 not the 13 phases. **`AGENDA.md` is the source of truth for build state** — this file
 carries open questions, hazards and context around it.
@@ -14,14 +14,26 @@ carries open questions, hazards and context around it.
 
 ## Where the project stands
 
-**M1 done, M2 begun.** 7 of 27 components built, **173 tests green** on 3.13, ruff clean,
-domain-neutrality gate clean.
+**M1 done, M2 half done.** 8 of 27 components built, **204 tests green** on 3.13, ruff
+clean, format clean, domain-neutrality gate clean.
+
+**C-07 landed 2026-09-16** — the symbol store. JSpec now remembers what it parsed:
+
+```
+jspec index --profile playwright-e2e <M2M>   -> 1885 files, 8911 symbols, 199615 refs, 10.9 s
+jspec index --profile playwright-e2e <M2M>   -> files_parsed 0, files_unchanged 1885, 1.9 s
+jspec find ensureAvaTaxEnabled <M2M>         -> support/avalaraSetupPage.ts:325, 0.43 s end to end
+```
+
+Content hashes, never timestamps. One database per indexed root under JSpec's own
+`.sdd/index/`, never in the repository being read (**D-037**). Edges are stored with
+`module` and `resolution`; traversal is left to C-08 (**D-038**).
 
 **C-06 landed 2026-09-06** — the symbol extractor. JSpec now reads source as structure:
 
 ```
 python core/scripts/jspec.py extract --profile jspec-self
-  -> 26 files, 292 symbols, 1024 references, modules ['core', 'tests']
+  -> 27 files, 292 symbols, 1030 references, modules ['core', 'tests']
 ```
 
 Four languages ship. Every grammar node-type name lives in
@@ -40,11 +52,13 @@ What works today:
 jspec classify "add password reset"              -> route, chain, budgets
 jspec plan-chain T-2 --profile X                 -> steps, minus skips
 jspec validate profile file.json                 -> ok, or every problem
-jspec extract --profile X [--file F] [--symbols] -> symbols + references
-jspec tools                                      -> all 10, with status
+jspec extract --profile X [--file F] [--symbols] -> symbols + references (one pass)
+jspec index   --profile X [root] [--rebuild]     -> refresh the store, parsing only changes
+jspec find    NAME [root] [--text|--kind|--file] -> where it is, or what is like it
+jspec tools                                      -> all 10, with status (4 ready)
 ```
 
-### Built and working — 7 of 27 components
+### Built and working — 8 of 27 components
 
 | ID | Component | Evidence |
 |---|---|---|
@@ -55,6 +69,7 @@ jspec tools                                      -> all 10, with status
 | C-25 | Profile engine — contract, loader, 3 profiles | 258 ln + 21 tests, thin per D-030 |
 | C-05 | Tool surface — `jspec` command, tool registry | 480 ln + 38 tests, 3 of 10 tools live |
 | C-06 | Symbol extractor — tree-sitter, 4 languages | 943 ln + 45 tests |
+| C-07 | Symbol store — SQLite, content hash, FTS5 | 674 ln + 33 tests |
 
 ### Stubbed / partial — 3 components
 
@@ -62,27 +77,50 @@ jspec tools                                      -> all 10, with status
 - **C-12 Template registry** — 1 of 9 templates written (`specify.yaml`)
 - **C-14 Skills & agents** — 3 skills (router, recall, specify) + 2 agents of ~9
 
-### Not started — 17 components
+### Not started — 16 components
 
-C-07 symbol store · C-08 blast radius · C-09 retriever · C-10 context builder ·
+C-08 blast radius · C-09 retriever · C-10 context builder ·
 C-11 redactor · C-13 judge port · C-15 decomposer · C-17 gate ledger · C-18 generator ·
 C-19 validator · C-20 repair · C-21 evals (blocked) · C-22 experience ·
 C-23 traceability · C-24 cost ledger · C-26 project profiler · C-27 convention learner
 
-`specs/`, `evals/golden/`, `evals/rubrics/` are still empty. `.sdd/` is still missing
-`index/ cache/ knowledge/ traces/ metrics/ gates.jsonl` — **C-07 creates `index/` first.**
+`specs/`, `evals/golden/`, `evals/rubrics/` are still empty. `.sdd/` now has `index/`; still missing
+`cache/ knowledge/ traces/ metrics/ gates.jsonl`.
 
 ## Next actions, in order
 
-1. **C-07 symbol store.** SQLite index of C-06's output, refreshed only for files whose
-   content hash changed, plus full-text search. The `module` column ships in the first
-   migration (D-032). Prove the incremental path rather than asserting it: index
-   everything, change one file, re-index, show only that file was re-read.
-2. **C-08 blast radius** — transitive closure over the graph, cycle-safe, depth-limited
-   *with the depth reported*, reverse direction, connection chain per result. It should
-   consume C-06's `resolution` so it can say "7 certain, 3 possible".
-3. **C-26 project profiler**, then **stop and use M2 for two weeks** before building more.
-4. Commit at each component boundary. D-022 makes git the rollback mechanism.
+1. **C-08 blast radius** — transitive closure over the stored edges, cycle-safe,
+   depth-limited *with the depth reported*, reverse direction, connection chain per
+   result. The store already indexes both directions (`refs_name` for "who calls X",
+   `refs_file` for "what does this file use"), so no migration is needed. It **must**
+   split certain from possible: 72% of the M2M graph is `name_only`.
+2. **C-26 project profiler**, then **stop and use M2 for two weeks** before building more.
+3. Commit at each component boundary. D-022 makes git the rollback mechanism.
+
+Deferred, with the reason recorded in D-038: a **stat-based pre-filter** before hashing.
+A no-change re-index of 1,885 files costs 1.9-2.4 s against the ~1 s the component guide
+asked for, and the floor is the walk plus a full read of every file.
+
+## Verified against a real external repo (2026-09-16)
+
+C-06 was run on `Documents/GitHub/Made2Manage-Automation` with the shipped
+`playwright-e2e` profile, unmodified: **1,885 files, 8,911 symbols, 199,615
+references, 64s, zero unreadable, zero parse failures**, split across
+`page-objects / support / tests`. First external-repo evidence for the extractor.
+
+**Two facts C-07 and C-08 must design for:**
+
+- **Scale.** 8,911 symbols and ~200k edges. The incremental-on-content-hash path is
+  load-bearing at that size, not an optimisation.
+- **72% of edges are `name_only`** (143,261 vs 56,083 `exact`). On a page-object suite
+  nearly every call is `this.x()` or `page.y()`, so D-034's resolution tag is the
+  majority of the graph there. **C-08 must report "N certain, M possible"** — a bare
+  count would be actively misleading on this repo.
+
+Worked example kept for C-08's acceptance: `ensureAvaTaxEnabled` resolves to
+`support/avalaraSetupPage.ts:325-354`, `parent AvalaraSetupPage` - **not**
+`navigation.ts` where the prompt guessed it. 10 files reference it, but that count
+came from `grep`: `blast_radius` correctly refuses, naming C-07.
 
 Full detail, dependencies and acceptance tests: **`docs/COMPONENT-GUIDE.md`** — read the
 relevant entry before building any component.
@@ -108,7 +146,65 @@ relevant entry before building any component.
   over-linked (D-034).
 - **pip broken in `.venv`** — repaired with `ensurepip`; `core[graph,dev]` installed.
 
+## Algorithms chosen for components not yet built (raised 2026-09-16)
+
+Owner asked whether the design uses graph/DSA properly. It does - C-06 emits nodes and
+edges, C-07 persists them as an adjacency list indexed in both directions, C-08 is the
+traversal. Four structures were named for later components and should not be
+re-derived:
+
+- **C-08 uses BFS, not DFS.** Not for speed (both O(V+E)) but because BFS explores in
+  rings of distance: ring 1 breaks immediately, ring 4 probably never, and the first
+  arrival at a node is the shortest connection chain - which the guide requires per
+  result. A DFS depth limit is meaningless ("deep down some paths, untouched on
+  others"), and a truncated answer shaped like a complete one is what D-034 forbids.
+  DFS keeps one job: back-edge cycle detection.
+- **C-08 may need Tarjan SCC + topological order + memoised DP** for *all-pairs*
+  reachability (`reachable(v) = {v} ∪ ⋃ reachable(children)` - real overlapping
+  subproblems). Only if a repo-wide ranking feature appears; a single query is plain
+  BFS, and computing the whole closure to answer one question is waste.
+- **C-10's real problem is 0/1 knapsack**, not retrieval: maximise Σrelevance subject to
+  Σtokens ≤ budget. **Solve it greedily by value-density, not with exact DP**, and say
+  so in the docstring. Reasons: relevance values are noisy estimates (exact optimisation
+  of a guess is false precision), items have precedence constraints (a method without
+  its class is useless) which makes it NP-hard anyway, and the expansion ladder already
+  encodes that precedence tree.
+- **C-16 should use Union-Find** for "amplify packages touching the same files" -
+  correlated packages are connected components over a package/file bipartite graph.
+
+**C-07 schema v2, when 1.9 s starts to annoy: Merkle directory hashing.**
+`hash(dir) = H(hash(child1) || hash(child2) || ...)`, so a matching directory hash
+proves every file beneath it is unchanged without reading any of them. Descend only
+into subtrees whose hash differs. Better than the stat pre-filter deferred in D-038
+because it keeps hashes as the sole authority - no timestamp trust - for ~100x less
+I/O. This is how git tree objects make `git status` instant. Do it **after C-08**:
+blast radius is worth more than 1.5 saved seconds.
+
+**The ranking that matters for tokens**, measured, so effort goes to the top of it:
+sending a graph *answer* instead of the code it describes is ~600x (60 tokens vs 40k);
+symbol instead of whole file is 40x (30 lines of 1,217); route-depth skipping 3-8x;
+knapsack packing inside the budget only 1.2-2x. **The graph's value is that its answer
+replaces code you would otherwise have had to send** - not that traversal is elegant.
+
 ## Watch out for
+
+- **The C-06 self-index figures move whenever a source file is added.** They are 27
+  files / 292 symbols / 1030 references as of this session's start and 29 / 373 / 1396
+  after C-07 landed. Do not treat a mismatch as drift; re-run `jspec extract --profile
+  jspec-self` before believing either number.
+- **`git status` cannot detect a stray index.** `.sdd/index/` is gitignored, so a
+  database written into the wrong place is invisible to git by construction. The CI gate
+  asserts the positive instead - the store is under `.sdd/index` and no `*.db` exists
+  anywhere else in the tree.
+- **SQLite fires row triggers for foreign-key cascades only when `recursive_triggers` is
+  on.** `store._forget()` therefore deletes from `symbols`, `refs` and `files`
+  explicitly rather than leaning on `ON DELETE CASCADE`: a cascade would leave the FTS5
+  index holding entries for symbols that no longer exist. There is a test for exactly
+  that (`test_deleting_a_file_clears_its_full_text_entries`).
+- **First-touch file I/O on this machine is 50x slower than warm.** Reading and hashing
+  the M2M suite's 21 MB costs 17.3 s the first time and 0.33 s the second - OneDrive
+  hydration plus Defender's on-access scan. Any timing measured here is meaningless
+  unless it says which of the two it is.
 
 - **`check_domain_neutrality.py` screens tool names only, not language names.** It would
   not have caught C-02's extension list, and it will not catch the next one.

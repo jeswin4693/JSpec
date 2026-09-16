@@ -4,14 +4,15 @@ A tool returns **ground truth, never an opinion**. The moment one starts returni
 judgement, a second model call is hidden behind an API and the audit trail is gone -
 which is the whole reason the deterministic half of this system exists (D-003).
 
-Ten tools are specified. Three are implemented here, because three are all that the
+Ten tools are specified. Four are implemented here, because four are all that the
 built components can answer honestly:
 
     classify_task     <- jspec.router          (C-02, built)
     plan_chain        <- jspec.router          (C-02, built)
     validate_artifact <- jspec.contracts.KINDS (C-01, built)
+    find_existing     <- jspec.graph.store     (C-07, built)
 
-The other seven raise `ToolUnavailable` naming the component they wait on. That is a
+The other six raise `ToolUnavailable` naming the component they wait on. That is a
 deliberate choice over returning something plausible: a missing tool gets built, a
 lying tool gets trusted. Placeholder data here would flow into a risk score and out
 to a gate, and nothing downstream could tell it from a measurement.
@@ -82,14 +83,18 @@ REGISTRY: tuple[Tool, ...] = (
     Tool(
         "blast_radius",
         "Files and modules importing or calling a symbol, via the symbol graph.",
-        blocked_by="C-07",
-        reason="needs the symbol store; there is no code graph yet",
+        blocked_by="C-08",
+        # Re-pointed when C-07 landed. The store answers one hop - "who names this?"
+        # - in 0.24ms on a 200k-edge index, but the transitive closure, the cycle
+        # guard and the reported depth limit are C-08's job, and a one-hop answer
+        # presented as a blast radius is exactly the partial-answer-shaped-like-a-
+        # complete-one this system refuses to give.
+        reason="the symbol store is built; traversal, cycle safety and depth "
+        "reporting arrive with C-08",
     ),
     Tool(
         "find_existing",
         "Existing helpers that already do this, before a line is written.",
-        blocked_by="C-07",
-        reason="needs the symbol store and its full-text index",
     ),
     Tool(
         "score_risk",
@@ -145,7 +150,7 @@ def unavailable(name: str) -> ToolUnavailable:
     )
 
 
-# --- the three that are answerable today -----------------------------------------
+# --- the four that are answerable today ------------------------------------------
 
 
 def classify_task(
@@ -256,6 +261,57 @@ def validate_artifact(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
     return {"ok": True, "kind": kind, "errors": []}
 
 
+def find_existing(
+    query: str,
+    *,
+    root: str = ".",
+    kind: str | None = None,
+    module: str | None = None,
+    limit: int = 20,
+) -> dict[str, Any]:
+    """What already exists with this name or close to it, from the symbol store.
+
+    The reuse question, answered from an index instead of from memory. This is the
+    tool that makes "search before you write a new helper" cheap enough to be
+    habitual - 0.5ms against a 9,000-symbol index, versus a model recalling what it
+    thinks the repository contains.
+
+    Two rungs, cheapest first, and the answer says which one replied: an exact name
+    match, then full-text prefix search only if exact found nothing. That ordering
+    is C-09's ladder in miniature - the expensive method is the fallback, never the
+    opening move. `mode` is in the payload because "no exact match, but here are
+    six similarly named things" and "here is the exact thing" are different answers
+    and a caller must not confuse them.
+
+    An unindexed root raises rather than returning an empty list: "nothing found"
+    and "nothing looked" are indistinguishable to a reader, and the second one is a
+    missing step, not a fact about the repository.
+    """
+    from pathlib import Path
+
+    from jspec.graph.store import open_store
+
+    with open_store(Path(root), create=False) as store:
+        store.require_indexed(f"run `jspec index {root} --profile <name>` first")
+        rows = store.lookup(query, kind=kind, module=module, limit=limit)
+        mode = "exact"
+        if not rows and store.full_text_search:
+            rows = [
+                row
+                for row in store.search(query, limit=limit)
+                if (kind is None or row["kind"] == kind)
+                and (module is None or row["module"] == module)
+            ]
+            mode = "text"
+        return {
+            "query": query,
+            "root": Path(root).resolve().as_posix(),
+            "mode": mode,
+            "matches": len(rows),
+            "rows": rows,
+        }
+
+
 __all__ = [
     "BY_NAME",
     "REGISTRY",
@@ -264,6 +320,7 @@ __all__ = [
     "ToolUnavailable",
     "classify_task",
     "describe",
+    "find_existing",
     "plan_chain",
     "unavailable",
     "validate_artifact",

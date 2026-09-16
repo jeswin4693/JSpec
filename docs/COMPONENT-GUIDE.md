@@ -463,7 +463,7 @@ simplification.
 
 ---
 
-## C-07 · Symbol store ⬜ not started · ~250 lines
+## C-07 · Symbol store ✅ done 2026-09-16 · 674 lines + 33 tests
 
 **In one line:** Remembers everything C-06 found, and updates only what changed.
 
@@ -496,6 +496,28 @@ and show me only that file was re-read."*
 **What you learn:** **Content addressing.** Hash the contents, never trust the timestamp —
 timestamps lie after a checkout, a copy, or a clock change. This exact idea sits underneath
 Git objects, build caches and container layers, so learning it once pays off everywhere.
+
+**As built.** `core/src/jspec/graph/store.py`, SQLite via the standard library, schema
+version 1. Reuses C-06's `iter_source_files` for the walk and `extract_file` per dirty
+file rather than adding a second walker. FTS5 is probed rather than assumed, and
+`search()` names the missing module if a SQLite build lacks it instead of silently
+degrading. `jspec index` and `jspec find` are the two new commands; `find_existing`
+became the fourth ready tool in the registry, and `blast_radius` moved from "blocked by
+C-07" to "blocked by C-08" (D-038).
+
+**Measured on the Made2Manage suite** (1,885 files, 8,911 symbols, 199,615 references):
+full index 10.9 s, **re-index with nothing changed 1.9 s and zero files parsed**, one
+file edited 2.5 s, database 67.5 MB. Queries: exact name 0.53 ms, FTS prefix 0.69 ms,
+one-hop callers 0.24 ms — against 13,800 ms to answer the same question by re-parsing.
+
+**Deviation from "about a second".** A no-change re-index costs 1.9-2.4 s on that suite,
+not ~1 s: the floor is the directory walk plus a full read of every file to hash it. The
+fix is git's other trick, a stat-based pre-filter before hashing, deferred with its
+reason in D-038 rather than quietly counted as met.
+
+**Where the decisions are:** D-037 (one database per root, in JSpec's `.sdd/index`, never
+in the indexed repository) and D-038 (edges stored but traversal left to C-08;
+full text over names, not bodies).
 
 ---
 

@@ -72,6 +72,64 @@ jobs:
           sys.exit('; '.join(problems)) if problems else print('ok', r['symbols'], 'symbols')
           "
 
+      - name: The store indexes this repository, then re-reads nothing (C-07)
+        # The one claim unit tests cannot make about a cache: that the SECOND run
+        # is cheap on a real tree. A store that quietly re-parses everything passes
+        # every correctness test there is while being worthless, so CI runs the
+        # index twice and fails if the second run parsed a single file.
+        run: |
+          python core/scripts/jspec.py index --profile jspec-self > index1.json
+          python core/scripts/jspec.py index --profile jspec-self > index2.json
+          python -c "
+          import json, sys
+          first = json.load(open('index1.json'))
+          second = json.load(open('index2.json'))
+          problems = []
+          if first['symbols'] < 100:
+              problems.append(f\"only {first['symbols']} symbols indexed\")
+          if first['files_parsed'] != first['files_seen']:
+              problems.append('first run skipped files it had never seen')
+          if second['files_parsed'] != 0:
+              problems.append(f\"second run re-parsed {second['files_parsed']} files\")
+          if second['files_unchanged'] != first['files_seen']:
+              problems.append('second run did not recognise every file as unchanged')
+          if second['symbols'] != first['symbols']:
+              problems.append('re-indexing changed the symbol count')
+          if not second['full_text_search']:
+              problems.append('no FTS5 in this SQLite build')
+          sys.exit('; '.join(problems)) if problems else print(
+              'ok', first['symbols'], 'symbols,', second['files_unchanged'], 'unchanged on re-run')
+          "
+
+      - name: The index lands in .sdd/index and nowhere else (C-07)
+        # "git sees no new file" would be the obvious check and it is worthless:
+        # .sdd/index/ is gitignored, so a database dropped anywhere ignored is
+        # invisible to git by construction. So this asserts the positive - the
+        # store is where the run said it was, under .sdd/index - and then that no
+        # other database exists anywhere in the tree.
+        run: |
+          python -c "
+          import json, pathlib, sys
+          store = pathlib.Path(json.load(open('index2.json'))['store'])
+          problems = []
+          if not store.is_file():
+              problems.append(f'the run reported a store at {store} that does not exist')
+          if store.parent.name != 'index' or store.parent.parent.name != '.sdd':
+              problems.append(f'store landed outside .sdd/index: {store}')
+          strays = [
+              p.as_posix() for p in pathlib.Path('.').rglob('*.db')
+              if '.sdd/index/' not in p.as_posix() and '.venv' not in p.as_posix()
+          ]
+          if strays:
+              problems.append(f'databases outside .sdd/index: {strays}')
+          sys.exit('; '.join(problems)) if problems else print('ok store at', store)
+          "
+          git status --porcelain --untracked-files=no > tracked-changes.txt
+          if [ -s tracked-changes.txt ]; then
+            echo "indexing modified tracked files:"; cat tracked-changes.txt; exit 1
+          fi
+          echo "ok no tracked file was modified by indexing"
+
   artifacts:
     # Config files are load-bearing: a malformed plugin manifest or template
     # registry fails at runtime, in someone's session, with a worse error message.

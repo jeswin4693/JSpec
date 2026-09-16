@@ -10,6 +10,13 @@ build/
 .ruff_cache/
 
 # JSpec runtime state (derived - rebuildable from the repo, never the source of truth)
+# The symbol store (C-07) lives in .sdd/index/, one SQLite file per indexed root -
+# 67 MB for a 1,885-file suite, so it must never reach a commit. It is a cache:
+# delete it and `jspec index` rebuilds it from source.
+.sdd/index/
+.sdd/cache/
+# The pre-.sdd paths (D-019 renamed the folder). Kept because `record_preference`
+# still has no agreed home and skills/router/SKILL.md names .jspec/.
 .jspec/index.db
 .jspec/*.sqlite*
 .jspec/cache/
@@ -18,6 +25,9 @@ build/
 # audit trail in git - do not let them arrive by accident.
 .jspec/traces.jsonl
 .jspec/gates.jsonl
+.sdd/traces/
+.sdd/metrics/
+.sdd/gates.jsonl
 
 # Chat history / session journal - LOCAL ONLY, by the owner's instruction (D-029).
 # Keep writing it every session (CLAUDE.md 0b) - it is how a new chat resumes. It is

@@ -19,7 +19,7 @@ Exit codes are the fast signal, so a caller need not parse to know what happened
     2  the caller made a mistake (unknown kind, bad route, unreadable file)
     3  the tool is specified but not built yet - the message names the component
 
-Only commands backed by a built component are registered. Seven more are specified
+Only commands backed by a built component are registered. Six more are specified
 in `jspec.tools.REGISTRY`; `jspec tools` lists all ten with their status, so what is
 coming stays visible without putting a command on the menu that can only fail.
 """
@@ -34,6 +34,7 @@ from typing import Any
 from jspec import tools
 from jspec.config import ConfigError
 from jspec.graph import ExtractError
+from jspec.graph.store import StoreError
 from jspec.profiles import ProfileError
 
 EXIT_OK = 0
@@ -167,6 +168,66 @@ def cmd_extract(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_index(args: argparse.Namespace) -> int:
+    """Bring the symbol store level with a tree (C-07).
+
+    Prints the run summary, whose headline is `files_parsed` against `files_seen`:
+    after the first run that should be the number of files you actually edited.
+    """
+    from pathlib import Path
+
+    from jspec.graph.store import open_store
+    from jspec.profiles import load as load_profile
+
+    profile = load_profile(args.profile)
+    root = Path(args.root)
+    if not root.is_dir():
+        raise ValueError(f"{root} is not a directory")
+
+    with open_store(root) as store:
+        stats = store.refresh(root, profile, rebuild=args.rebuild)
+    _emit(stats.to_dict())
+    return EXIT_OK
+
+
+def cmd_find(args: argparse.Namespace) -> int:
+    """Ask the store what exists, by exact name or by text (C-07).
+
+    Exact lookup first, full-text only when asked, because they answer different
+    questions: `--text` is for "is there anything like this?", a bare name is for
+    "where is this?". A store that has never been indexed says so and names the
+    command that fixes it, rather than returning an empty list that reads like
+    "nothing here".
+    """
+    from pathlib import Path
+
+    from jspec.graph.store import open_store
+
+    root = Path(args.root)
+    with open_store(root, create=False) as store:
+        store.require_indexed(f"run `jspec index {args.root} --profile <name>` first")
+        rows = (
+            store.search(args.query, limit=args.limit)
+            if args.text
+            else store.lookup(
+                args.query or None,
+                kind=args.kind,
+                file=args.file,
+                module=args.module,
+                limit=args.limit,
+            )
+        )
+        _emit(
+            {
+                "query": args.query,
+                "mode": "text" if args.text else "exact",
+                "matches": len(rows),
+                "rows": rows,
+            }
+        )
+    return EXIT_OK
+
+
 def cmd_tools(_: argparse.Namespace) -> int:
     _emit(tools.describe())
     return EXIT_OK
@@ -265,6 +326,59 @@ def build_parser() -> argparse.ArgumentParser:
     )
     extract.set_defaults(func=cmd_extract)
 
+    index = sub.add_parser(
+        "index",
+        help="Index a tree into the symbol store, re-reading only what changed (C-07).",
+        description="Refresh the SQLite symbol index. Prints what it actually parsed.",
+    )
+    index.add_argument(
+        "root",
+        nargs="?",
+        default=".",
+        help="Root folder to index. The store lives in JSpec's .sdd/index, never here.",
+    )
+    index.add_argument(
+        "--profile",
+        required=True,
+        help="Profile name. Supplies the languages and the directories to walk.",
+    )
+    index.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="Re-parse every file regardless of hash - for after a grammar change.",
+    )
+    index.set_defaults(func=cmd_index)
+
+    find = sub.add_parser(
+        "find",
+        help="What exists in the index: by name, kind, file, module or text (C-07).",
+        description="Query the symbol store. Exact by default; --text for full-text.",
+    )
+    find.add_argument(
+        "query",
+        nargs="?",
+        default=None,
+        help="Symbol name for an exact match, or words to search with --text.",
+    )
+    find.add_argument(
+        "root",
+        nargs="?",
+        default=".",
+        help="The indexed root, so the right store is opened.",
+    )
+    find.add_argument(
+        "--text",
+        action="store_true",
+        help="Full-text prefix search over names and paths instead of exact match.",
+    )
+    find.add_argument("--kind", default=None, help="function, class, method, interface.")
+    find.add_argument(
+        "--file", default=None, metavar="PATH", help="Only symbols in this file."
+    )
+    find.add_argument("--module", default=None, help="Only symbols in this sub-folder.")
+    find.add_argument("--limit", type=int, default=50, help="Maximum rows. Default 50.")
+    find.set_defaults(func=cmd_find)
+
     listing = sub.add_parser(
         "tools",
         help="All ten tools and what each is waiting on.",
@@ -286,9 +400,10 @@ def main(argv: list[str] | None = None) -> int:
     except ProfileError as exc:
         print(f"profile error: {exc}", file=sys.stderr)
         return EXIT_USAGE
-    except (ExtractError, ConfigError) as exc:
-        # Both mean the run could not start honestly - an unsupported language, a
-        # missing grammar, unreadable exclusion rules. None of them is a "no".
+    except (ExtractError, ConfigError, StoreError) as exc:
+        # All three mean the run could not start honestly - an unsupported language,
+        # a missing grammar, unreadable exclusion rules, an index written by another
+        # schema version. None of them is a "no".
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_USAGE
     except (ValueError, KeyError) as exc:

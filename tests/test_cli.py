@@ -154,7 +154,6 @@ class TestUnbuiltToolsRefuse:
         "name",
         [
             "blast_radius",
-            "find_existing",
             "score_risk",
             "record_gate",
             "record_preference",

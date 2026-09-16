@@ -94,6 +94,27 @@ def _cached_excludes(root_key: str | None) -> tuple[str, ...]:
     return tuple(sorted(set(never_include) | set(never_send)))
 
 
+def index_settings(root: Path | None = None) -> dict[str, object]:
+    """The `index:` section: where the symbol store lives and how it decides staleness.
+
+    Read rather than defaulted, for the reason this module has no fallback exclusion
+    list: a missing section is a broken configuration, and inventing `sha256` here
+    would mean two authorities for one fact (constitution rule 2). C-07 is the first
+    consumer, which is why this accessor did not exist until now.
+    """
+    raw = load(root)
+    section = raw.get("index")
+    if not isinstance(section, dict):
+        raise ConfigError(
+            f"{config_path(root)} has no `index:` section: expected root, "
+            f"incremental, hash_algorithm and reindex_on"
+        )
+    missing = [k for k in ("root", "hash_algorithm") if k not in section]
+    if missing:
+        raise ConfigError(f"{config_path(root)} index section is missing {missing}")
+    return dict(section)
+
+
 def exclude_patterns(root: Path | None = None) -> tuple[str, ...]:
     """Glob patterns that must never be read, from both config lists combined.
 
@@ -108,5 +129,6 @@ __all__ = [
     "ConfigError",
     "config_path",
     "exclude_patterns",
+    "index_settings",
     "load",
 ]
