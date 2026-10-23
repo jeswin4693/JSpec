@@ -15,8 +15,8 @@ carries open questions, hazards and context around it.
 ## Where the project stands
 
 **M1 and M2 done.** 10 of 27 components built, **322 tests green** on 3.13, ruff clean,
-format clean, domain-neutrality gate clean. **Uncommitted** — C-08 and C-26 are on disk but
-not yet committed (see Watch out for).
+format clean, domain-neutrality gate clean. **Pushed 2026-10-23** as two commits
+(`bdb6bc0` C-08, `fcf1170` C-26) to `origin/main`; see the CI note under Watch out for.
 
 **C-26 landed 2026-10-23** — the project profiler. JSpec can now draft a profile for a
 repository it has never seen, and show how sure it is of each field:
@@ -130,10 +130,9 @@ C-23 traceability · C-24 cost ledger · C-27 convention learner
 
 ## Next actions, in order
 
-1. **Commit C-08 and C-26** (D-022: git is the rollback mechanism; boundary commits) —
-   as two commits if possible: C-08's files first (it is the dependency), then C-26's.
-   Stage by path; the working tree also holds two untracked items that are not JSpec's
-   (see Watch out for).
+1. **Fix the `artifacts` CI job** — it has failed on every push since C-06, at step 10
+   ("The tool surface runs…"), while both `test` jobs pass. See Watch out for. Small, but
+   a red job that nobody trusts hides the next real failure.
 2. **Use M2 for two weeks before building more** — that is the milestone's own
    instruction. Watch: is `possible` too noisy on common names? Does depth 4 feel right?
    Is the file graph's import matching missing aliases (`@/…`) on a real TS suite? Does the
@@ -249,7 +248,14 @@ replaces code you would otherwise have had to send** - not that traversal is ele
   lives in a sub-folder (this one: `core/pyproject.toml`) gets lint/format/typecheck as
   `unknown`, with an observation naming the unread file. That is the design; widening it
   means deciding which directory a command runs from.
-- **C-08 and C-26 are uncommitted, and the working tree holds two items that are not JSpec's.**
+- **CI: the `artifacts` job is red, and has been since C-06 (found 2026-10-23).** On pushes
+  `8003c47` (C-06), `390b36b` (C-07) and `fcf1170` (C-26) the two `test` jobs (3.12, 3.13:
+  lint, format, full suite, the C-06/C-07/C-08/C-26 gates) passed, while `artifacts` failed at
+  step 10, "The tool surface runs, and unbuilt tools refuse rather than guess". Probable
+  cause, **not verified** (logs need a login): that job installs only `pyyaml`, but
+  `jspec.py` imports `pydantic`. Unrelated to C-08/C-26. `gh` is not installed here; the
+  public API (`api.github.com/repos/jeswin4693/JSpec/actions/runs`) shows run and step status.
+- **The working tree holds two untracked items that are not JSpec's.**
   `.work-folder-info` and `d8c323a9-552d-473a-8172-75f6001b63a5/` (contains
   `SynapseNotebook/`) appeared on 2026-10-23 at 11:35 — Fabric/Synapse editor-extension
   metadata, not created by JSpec work. Not gitignored. Do not `git add -A`; stage by path.
