@@ -204,7 +204,11 @@ jobs:
           python-version: "3.13"
 
       - name: Install
-        run: python -m pip install pyyaml
+        # The package itself, not a hand-kept list. This job runs jspec.py, which imports
+        # pydantic; it installed only pyyaml and so failed on every push from C-06 on
+        # while the `test` jobs stayed green. core/pyproject.toml is the one place the
+        # dependencies are declared, and a second list here is what went stale.
+        run: python -m pip install ./core
 
       - name: Plugin manifest and MCP config parse
         run: |
@@ -284,7 +288,13 @@ jobs:
           python core/scripts/jspec.py tools
           python core/scripts/jspec.py classify "add password reset" > /dev/null
           python core/scripts/jspec.py plan-chain T-2 --profile python-service > /dev/null
-          echo '{}' | python core/scripts/jspec.py validate profile - && exit 1 || true
+          # An empty profile must be REJECTED. The old form (`... && exit 1 || true`) could
+          # not tell a rejection from a crash: an uncaught exception also exits 1, which
+          # is the code the command uses for "the answer is no". So assert the verdict
+          # itself, which only a working command can print.
+          verdict=$(echo '{}' | python core/scripts/jspec.py validate profile - || true)
+          echo "$verdict" | grep -q '"ok": false' \
+            || { echo "validate did not reject an empty profile; it printed: $verdict"; exit 1; }
           echo ok tool surface
 
       - name: Domain knowledge stays in profiles, not in core (constitution rule 20)
