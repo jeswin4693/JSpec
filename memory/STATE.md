@@ -130,16 +130,13 @@ C-23 traceability · C-24 cost ledger · C-27 convention learner
 
 ## Next actions, in order
 
-1. **Fix the `artifacts` CI job** — it has failed on every push since C-06, at step 10
-   ("The tool surface runs…"), while both `test` jobs pass. See Watch out for. Small, but
-   a red job that nobody trusts hides the next real failure.
-2. **Use M2 for two weeks before building more** — that is the milestone's own
+1. **Use M2 for two weeks before building more** — that is the milestone's own
    instruction. Watch: is `possible` too noisy on common names? Does depth 4 feel right?
    Is the file graph's import matching missing aliases (`@/…`) on a real TS suite? Does the
    profiler draft something usable for a repository that is not this one?
-3. **Then M3.** C-09 retriever and C-11 redactor have no unbuilt dependencies. C-21's
+2. **Then M3.** C-09 retriever and C-11 redactor have no unbuilt dependencies. C-21's
    golden set still blocks on the owner and gates M5.
-4. **Ask before the real-repo proof.** C-26's acceptance names three real repositories;
+3. **Ask before the real-repo proof.** C-26's acceptance names three real repositories;
    only synthetic ones and this repo have been used. Reading another repo needs the owner's
    go-ahead (scope rule below).
 
@@ -248,13 +245,17 @@ replaces code you would otherwise have had to send** - not that traversal is ele
   lives in a sub-folder (this one: `core/pyproject.toml`) gets lint/format/typecheck as
   `unknown`, with an observation naming the unread file. That is the design; widening it
   means deciding which directory a command runs from.
-- **CI: the `artifacts` job is red, and has been since C-06 (found 2026-10-23).** On pushes
-  `8003c47` (C-06), `390b36b` (C-07) and `fcf1170` (C-26) the two `test` jobs (3.12, 3.13:
-  lint, format, full suite, the C-06/C-07/C-08/C-26 gates) passed, while `artifacts` failed at
-  step 10, "The tool surface runs, and unbuilt tools refuse rather than guess". Probable
-  cause, **not verified** (logs need a login): that job installs only `pyyaml`, but
-  `jspec.py` imports `pydantic`. Unrelated to C-08/C-26. `gh` is not installed here; the
-  public API (`api.github.com/repos/jeswin4693/JSpec/actions/runs`) shows run and step status.
+- **CI is green on all three jobs as of `b7d319d` (2026-10-23).** The `artifacts` job had
+  failed on every push since C-06 while both `test` jobs passed. Cause, reproduced in a clean
+  venv: it installed only `pyyaml`, but `jspec.py` imports `pydantic`. Fixed by installing
+  `./core` (dependencies stay declared in one place, `core/pyproject.toml`). A second defect
+  in the same step: `validate … && exit 1 || true` could not tell a rejection from a crash
+  (an uncaught exception also exits 1), so it passed vacuously; it now asserts the printed
+  verdict. **Lesson:** a check whose failure and success share an exit code proves nothing.
+  `gh` is not installed here; the public API
+  (`api.github.com/repos/jeswin4693/JSpec/actions/runs`) shows run and step status. To
+  reproduce a CI job locally, build its Install step in a fresh venv and run its `run:`
+  blocks from `ci.yml` in order — the developer's own `.venv` hides missing dependencies.
 - **The working tree holds two untracked items that are not JSpec's.**
   `.work-folder-info` and `d8c323a9-552d-473a-8172-75f6001b63a5/` (contains
   `SynapseNotebook/`) appeared on 2026-10-23 at 11:35 — Fabric/Synapse editor-extension
