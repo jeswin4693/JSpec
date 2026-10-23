@@ -15,6 +15,10 @@ build/
 # delete it and `jspec index` rebuilds it from source.
 .sdd/index/
 .sdd/cache/
+# Profile drafts (C-26): working files between `jspec profile draft` and `accept`. The
+# accepted profile goes to profiles/, which IS committed; the draft carries an absolute
+# local path and is not.
+.sdd/drafts/
 # The pre-.sdd paths (D-019 renamed the folder). Kept because `record_preference`
 # still has no agreed home and skills/router/SKILL.md names .jspec/.
 .jspec/index.db

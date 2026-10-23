@@ -36,7 +36,7 @@ from jspec.contracts.graph import (
     SymbolKind,
 )
 from jspec.contracts.plan import Plan, WorkPackage
-from jspec.contracts.profile import Profile, Validation
+from jspec.contracts.profile import Basis, Finding, Profile, ProfileDraft, Validation
 from jspec.contracts.risk import Decision, RiskBand, RiskItem, Verdict
 from jspec.contracts.routing import Classification, Route
 from jspec.contracts.spec import (
@@ -51,6 +51,9 @@ from jspec.contracts.spec import (
 KINDS: dict[str, type[BaseModel]] = {
     "classification": Classification,
     "profile": Profile,
+    # C-26. Hand-edited by a person between `draft` and `accept`, so the loader
+    # validates it - which is the live consumer that earns it an entry.
+    "profile_draft": ProfileDraft,
     "spec": Spec,
     "plan": Plan,
     "work_package": WorkPackage,
@@ -86,17 +89,20 @@ __all__ = [
     "KINDS",
     "AcceptanceScenario",
     "Assumption",
+    "Basis",
     "Classification",
     "Confidence",
     "Decision",
     "Evidence",
     "FileSymbols",
+    "Finding",
     "Gate",
     "GateDecision",
     "Id",
     "Plan",
     "Priority",
     "Profile",
+    "ProfileDraft",
     "Reference",
     "ReferenceKind",
     "Requirement",

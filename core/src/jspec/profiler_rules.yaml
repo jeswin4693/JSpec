@@ -1,0 +1,105 @@
+# What the project profiler (C-26) looks for in a repository it has never seen.
+# Shipped data, not code - the same split as graph/languages.yaml (D-033).
+#
+# WHY THIS IS A YAML FILE
+# Every entry below names a language, a framework or a command, which is exactly what
+# constitution rule 20 keeps out of core/. Held here, `profiler.py` stays a reader of
+# rule tables, and supporting a new kind of project is a data change with no new logic.
+#
+# THE RULE LANGUAGE (deliberately tiny - a rule language is a second program)
+#   file:   a name or glob present at the repository root
+#   toml:   a dotted table or key present in pyproject.toml
+#   dep:    a dependency declared in a manifest (package.json, pyproject, requirements)
+#   script: a script declared in package.json
+#   any:    a list of the above; the first that holds is the evidence
+#
+# BASIS (what a match means - see contracts/profile.py `Basis`)
+#   found     the value is read as written ("scripts.test is declared")
+#   inferred  a convention applied to a real signal ("a pytest config exists")
+# Nothing here is ever `guessed`: that is reserved for a folder name and nothing else.
+#
+# ORDER MATTERS. The first candidate whose condition holds wins, so a command the
+# project wrote down (found) is listed before a command we would assume (inferred).
+#
+# A command is only ever a convention applied to evidence. It is not a probe: nothing
+# in this file is run, and a wrong inference is caught by a person at `accept`.
+
+version: 1
+
+# The three manifest formats the profiler can read, by what they are. profiler.py knows
+# how to parse a JSON package manifest, a TOML project manifest and a list of
+# requirements; which *file* is which is a fact about an ecosystem, so it is named here.
+manifests:
+  package_json: package.json
+  project_toml: pyproject.toml
+  requirement_lists: "requirements*.txt"
+
+# `{runner}` in a command below. Lockfile decides; with none, the default is assumed
+# and the finding says so rather than presenting the assumption as read.
+runners:
+  - { file: pnpm-lock.yaml, run: pnpm }
+  - { file: yarn.lock, run: yarn }
+  - { file: package-lock.json, run: npm }
+default_runner: npm
+
+# `npm init` writes a `test` script that fails on purpose. It is the absence of a test
+# command, not a test command.
+placeholder_scripts: ["no test specified"]
+
+# A language is considered if its files are at least `min_share` of the recognised
+# source files, or at least `min_files` of them. Extensions for languages JSpec can
+# read come from graph/languages.yaml - one authority; `extensions` here is only for
+# languages it cannot read yet, so that they can be named and flagged.
+languages:
+  min_share: 0.05
+  min_files: 10
+  known:
+    - { id: python, evidence: { any: [{ file: pyproject.toml }, { file: setup.py }, { file: setup.cfg }, { file: requirements*.txt }, { file: Pipfile }] } }
+    - { id: typescript, evidence: { any: [{ file: tsconfig.json }, { dep: typescript }] } }
+    - { id: tsx, evidence: { any: [{ file: tsconfig.json }, { dep: typescript }] } }
+    - { id: javascript, evidence: { file: package.json } }
+    - { id: go, extensions: [".go"], evidence: { file: go.mod } }
+    - { id: rust, extensions: [".rs"], evidence: { file: Cargo.toml } }
+    - { id: java, extensions: [".java"], evidence: { any: [{ file: pom.xml }, { file: build.gradle }, { file: build.gradle.kts }] } }
+    - { id: csharp, extensions: [".cs"], evidence: { any: [{ file: "*.csproj" }, { file: "*.sln" }] } }
+
+checks:
+  test:
+    - { command: "{runner} run test", when: { script: test }, basis: found }
+    - { command: "npx playwright test", when: { any: [{ file: "playwright.config.*" }, { dep: "@playwright/test" }] }, basis: inferred }
+    - { command: "pytest", when: { any: [{ file: pytest.ini }, { toml: tool.pytest }, { toml: tool.pytest.ini_options }, { dep: pytest }, { file: conftest.py }] }, basis: inferred }
+    - { command: "npx vitest run", when: { dep: vitest }, basis: inferred }
+    - { command: "npx jest", when: { any: [{ file: "jest.config.*" }, { dep: jest }] }, basis: inferred }
+    - { command: "go test ./...", when: { file: go.mod }, basis: inferred }
+    - { command: "cargo test", when: { file: Cargo.toml }, basis: inferred }
+  lint:
+    - { command: "{runner} run lint", when: { script: lint }, basis: found }
+    - { command: "ruff check .", when: { any: [{ toml: tool.ruff }, { file: ruff.toml }, { file: .ruff.toml }, { dep: ruff }] }, basis: inferred }
+    - { command: "npx eslint .", when: { any: [{ file: "eslint.config.*" }, { file: ".eslintrc*" }, { dep: eslint }] }, basis: inferred }
+  format:
+    - { command: "{runner} run format:check", when: { script: "format:check" }, basis: found }
+    - { command: "ruff format --check .", when: { any: [{ toml: tool.ruff }, { file: ruff.toml }, { file: .ruff.toml }, { dep: ruff }] }, basis: inferred }
+    - { command: "npx prettier --check .", when: { any: [{ file: ".prettierrc*" }, { file: "prettier.config.*" }, { dep: prettier }] }, basis: inferred }
+  typecheck:
+    - { command: "{runner} run typecheck", when: { script: typecheck }, basis: found }
+    - { command: "{runner} run type-check", when: { script: type-check }, basis: found }
+    - { command: "npx tsc --noEmit", when: { file: tsconfig.json }, basis: inferred }
+    - { command: "mypy .", when: { any: [{ toml: tool.mypy }, { file: mypy.ini }, { dep: mypy }] }, basis: inferred }
+
+layout:
+  # Folder names that mean something by convention. Used together with what is in
+  # the folder: a name alone is only ever a guess.
+  test_dir_names: [tests, test, __tests__, spec, specs, e2e]
+  source_dir_names: [src, lib, app, core, pkg, cmd, internal]
+  # `core/src/pkg/x` is filed under `core/src/`, not `core/`: a conventional container
+  # one level down is the real source root. `src/` itself is never descended into.
+  descend_into: [src]
+  # Code that lives in the repository but is not the code under change. Left out of
+  # source_dirs when real source exists, and mentioned so the omission is visible.
+  non_source_dir_names: [docs, doc, examples, example, scripts, tools, benchmarks, migrations, vendor, third_party]
+  test_file_patterns: ["test_*", "*_test.*", "*.test.*", "*.spec.*"]
+  # Where a config file says outright where the tests are. `found`, not inferred.
+  declared_test_dirs:
+    - { toml: tool.pytest.ini_options.testpaths }
+    - { file: pytest.ini, regex: 'testpaths\s*=\s*(.+)' }
+    - { file: "playwright.config.*", regex: 'testDir\s*:\s*[''"]([^''"]+)[''"]' }

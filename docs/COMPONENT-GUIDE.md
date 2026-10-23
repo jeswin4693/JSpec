@@ -271,7 +271,7 @@ will bake in assumptions you then have to dig back out.
 
 ---
 
-## C-26 · Project profiler ⬜ not started · ~300 lines
+## C-26 · Project profiler ✅ done · ~885 lines + 66 tests
 
 **In one line:** Point it at a repository it has never seen, and it works out what the
 project is.
@@ -310,6 +310,24 @@ interesting engineering is the confidence marking. "Tests are in `tests/`" (foun
 config — certain) is a different claim from "shared code is probably `utils/`" (guessed
 from a folder name). **A draft that hides which parts are guesses is worse than no
 draft**, because the user skims it once and then trusts all of it equally.
+
+**As built.** `core/src/jspec/profiler.py`, with every ecosystem fact in
+`profiler_rules.yaml` (a four-condition rule language: file, toml, dep, script). Two
+commands: `jspec profile draft ROOT [--name N] [--set FIELD=VALUE] [--use-index]` writes a
+field-by-field draft to JSpec's own `.sdd/drafts/` and prints what needs attention;
+`jspec profile accept NAME [--accept-guesses] [--overwrite]` writes `profiles/<name>.yaml`
+only if nothing blocks it. Each field is `found`, `inferred`, `guessed`, `confirmed` or
+`unknown`, with evidence; a person's `--set` is `confirmed` and survives every later draft.
+Design in D-040.
+
+**Beyond or short of the guide:** the draft is its own contract (`profile_draft`), because a
+real `Profile` cannot hold an unknown test command. Layout from the symbol index is an
+*observation*, since no profile field can hold "shared code" yet (D-030). **Short of it:**
+validated on three synthetic repositories and this one, **not on a real external
+repository** — the owner's scope rule forbids reading others, so that remains open. Only
+root-level manifests are read; nested ones are reported as unread. On this repository it
+gets languages, source dirs, test dirs and the test command right, and reports
+lint/format/typecheck as unknown because their config is in `core/pyproject.toml`.
 
 ---
 
@@ -503,7 +521,7 @@ file rather than adding a second walker. FTS5 is probed rather than assumed, and
 `search()` names the missing module if a SQLite build lacks it instead of silently
 degrading. `jspec index` and `jspec find` are the two new commands; `find_existing`
 became the fourth ready tool in the registry, and `blast_radius` moved from "blocked by
-C-07" to "blocked by C-08" (D-038).
+C-07" to "blocked by C-08" (D-038); C-08 has since made it the fifth ready tool.
 
 **Measured on the Made2Manage suite** (1,885 files, 8,911 symbols, 199,615 references):
 full index 10.9 s, **re-index with nothing changed 1.9 s and zero files parsed**, one
@@ -521,7 +539,7 @@ full text over names, not bodies).
 
 ---
 
-## C-08 · Blast radius ⬜ not started · ~200 lines · **first component that earns its keep**
+## C-08 · Blast radius ✅ done · ~810 lines + 54 tests · **first component that earns its keep**
 
 **In one line:** Tells you everything that will break, before you change anything.
 
@@ -564,6 +582,20 @@ a model is that a model returns a plausible answer and this returns a fact. Ever
 you would actually trust has a layer like this underneath the language model — the model
 handles judgement, this handles truth. Confusing those two is the most common architectural
 mistake in AI tooling.
+
+**As built.** `core/src/jspec/graph/traverse.py`; `jspec blast-radius TARGET [root]
+[--direction dependents|dependencies] [--file F] [--depth N] [--limit N]`; `blast_radius`
+is the fifth ready tool. A name walks the call graph, a file walks the import graph. Every
+result is **certain or possible**, and the answer always carries the depth searched
+(`limit / reached / complete / stopped_by`), what it cannot see (`limits`), and how
+complete the index is (`index`). Design in D-039.
+
+**Beyond the guide's list:** the certain/possible split (72% of the M2M graph is
+`name_only`), the import graph for file targets, class targets that include their
+methods, and `entry_stems` in `languages.yaml`. **Measured on M2M:** `ensureAvaTaxEnabled`
+in 0.56 s end to end, two possible dependents, matching the two real call sites exactly.
+**Honest limit:** a common name like `click` returns 0 certain and 8,143 possible — correct,
+and not useful; narrowing by what a file imports would sharpen it (deferred, D-039).
 
 ---
 

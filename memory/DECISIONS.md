@@ -774,3 +774,68 @@ and the certainty model were not in the guide's estimate; the model is the part 
 the answer trustworthy on a graph that is 72% `name_only`, and I judged it not optional.
 Deferred: narrowing a call by *which names* a file imports (only whether it imports the
 defining file at all) — it would turn some possibles into certains, never the reverse.
+
+## D-040 · 2026-10-23 · The profiler drafts field by field, and never fills a gap with a plausible value
+
+C-26 is `core/src/jspec/profiler.py` + `profiler_rules.yaml`. Eight choices.
+
+**A draft is not a `Profile`.** `Profile` requires a test command; a repository with none
+must be able to say so rather than have one invented. So `ProfileDraft` (a list of
+`Finding`s) lives beside it in `contracts/profile.py` and is registered as kind
+`profile_draft` — its consumer is the loader, because a person hand-edits the file between
+`draft` and `accept`. `Finding` enforces evidence-or-silence in its validator: a value with
+no evidence cannot be constructed, and an `unknown` cannot carry a value.
+
+**Five bases, each a different claim.** `found` (read as written: a script, a config
+value), `inferred` (a convention applied to real evidence: a config table exists, so the
+conventional command), `guessed` (a folder *name* and nothing else), `confirmed` (a person
+said so), `unknown` (left empty). The rule tables only ever produce found/inferred;
+`guessed` is reserved for a name with nothing behind it, so a real guess stays rare and
+visible rather than being spread across the draft to look humble.
+
+**Knowledge is data, in a tiny rule language.** `profiler_rules.yaml` holds every
+ecosystem, command and manifest *filename*; conditions are `file`, `toml`, `dep`, `script`,
+`any`, and an unknown one is an error (a typo must not read as "nothing matched"). Reading
+extensions for readable languages come from `graph/languages.yaml` — one authority; the
+rules add extensions only for languages JSpec cannot read yet, so they can be named and
+flagged. A test pins that the two never overlap.
+
+**What it reads.** File and folder *names* across the tree (never contents), plus three
+manifest formats **at the repository root only**. A manifest in a sub-folder is reported as
+unread, because "no linter configured" and "a linter we did not look for" are different
+claims. Hidden and config-excluded folders are never walked. Nothing is written into the
+repository; drafts go to JSpec's own `.sdd/drafts/` (gitignored), as the index does (D-037).
+
+**A correction is never asked twice.** Layers, weakest first: detected < a profile accepted
+earlier < the previous draft's confirmed fields < this run's `--set`. A person always
+outranks a detector, on every later draft. The accepted `profiles/<name>.yaml` *is* the
+stored preference for profile fields; this does not settle `record_preference`'s path for
+anything else.
+
+**`accept` is guarded, and what it writes must load.** An unknown required field blocks it;
+so does an unconfirmed guess unless `--accept-guesses` is passed — "I read the draft" and
+"I agree with every line" are different statements and this is where they are separated.
+Accepting a guess records it as `confirmed`. It will not overwrite an existing profile
+without `--overwrite`, and it reloads what it wrote, deleting the file if that fails.
+Provenance goes into the saved file as a header comment; the `Profile` schema is untouched.
+
+**Layout, and the two bugs dogfooding found.** Source dirs are top-level folders holding
+source files, one level down through a conventional container (`core/src/`), excluding
+test folders and conventionally non-source ones (`docs/`, `scripts/`), each exclusion
+reported. A folder is a *dedicated* test folder if more than half its files match test
+patterns, or it is named like one and has at least one. Found by running it on this
+repository: `core/` and `core/src/` were both listed (the outer one is now dropped and its
+leftover files reported), and a library with one test per module sat at exactly 50% and
+read as a test folder (now strictly more than half).
+
+**The symbol index contributes an observation, not a field.** `--use-index` reports which
+folders the most others import (via the new public `traverse.imported_by`), only if the
+root is already indexed; it never triggers indexing. The profile has nowhere to put it yet
+(D-030). **Not done on purpose:** the CI workflow files are not read for commands.
+
+**Honest limits.** Validated on three synthetic repositories (Python service, TypeScript
+suite, JavaScript library) and on this one, **not on a real external repository** — the
+owner's scope rule of 2026-10-23 forbids reading others, so that proof is still open and
+needs a go-ahead. On this repo it gets languages, source, test dirs and the test command
+right and reports lint/format/typecheck as unknown, because `core/pyproject.toml` is nested.
+Monorepos get one profile. **Deviation:** ~885 lines (~650 code), not ~300, plus 66 tests.

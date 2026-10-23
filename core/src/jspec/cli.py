@@ -35,6 +35,7 @@ from jspec import tools
 from jspec.config import ConfigError
 from jspec.graph import ExtractError
 from jspec.graph.store import StoreError
+from jspec.profiler import ProfilerError
 from jspec.profiles import ProfileError
 
 EXIT_OK = 0
@@ -248,6 +249,114 @@ def cmd_blast_radius(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _parse_sets(pairs: list[str] | None) -> dict[str, str]:
+    """`--set field=value` pairs. A malformed pair is a usage error, not a skipped one."""
+    corrections: dict[str, str] = {}
+    for pair in pairs or []:
+        field, separator, value = pair.partition("=")
+        if not separator or not field.strip():
+            raise ValueError(f"--set expects field=value, got {pair!r}")
+        corrections[field.strip()] = value
+    return corrections
+
+
+def cmd_profile_draft(args: argparse.Namespace) -> int:
+    """Draft a profile for a repository JSpec has never seen (C-26).
+
+    Reads names across the tree and three manifests at its root; writes nothing into
+    it. The draft lands in JSpec's own `.sdd/drafts/`, and a value given with `--set`
+    is `confirmed`, so it survives every later draft - that is how a correction is
+    never asked for twice.
+    """
+    from pathlib import Path
+
+    from jspec import profiler
+    from jspec.contracts.profile import Basis
+    from jspec.graph.store import open_store
+    from jspec.profiles import load as load_profile
+
+    root = Path(args.root)
+    if not root.is_dir():
+        raise ValueError(f"{root} is not a directory")
+    name = args.name or profiler.slug(root.resolve().name)
+    directory = profiler.drafts_dir()
+
+    try:
+        accepted = load_profile(name)
+    except ProfileError:
+        accepted = None  # no profile by this name yet: the usual first run
+
+    store = None
+    note = None
+    if args.use_index:
+        try:
+            store = open_store(root, create=False)
+            store.require_indexed(f"run `jspec index {args.root} --profile {name}` first")
+        except StoreError as exc:
+            note = f"no index used: {exc}"
+            store = None
+    try:
+        draft = profiler.profile_repo(
+            root,
+            name=args.name,
+            corrections=_parse_sets(args.set),
+            previous=profiler.load_draft(name, directory),
+            accepted=accepted,
+            index=store,
+        )
+    finally:
+        if store is not None:
+            store.close()
+    if note:
+        draft.observations.append(note)
+
+    saved = profiler.save_draft(draft, directory)
+    counts = {basis.value: 0 for basis in Basis}
+    for finding in draft.findings:
+        counts[finding.basis.value] += 1
+    _emit(
+        {
+            "name": draft.name,
+            "root": draft.root,
+            "saved_to": saved.as_posix(),
+            "summary": counts,
+            "needs_attention": profiler.attention(draft),
+            "findings": [f.model_dump(mode="json") for f in draft.findings],
+            "observations": draft.observations,
+            "next": f"correct anything above with --set, then: jspec profile accept {draft.name}",
+        }
+    )
+    return EXIT_OK
+
+
+def cmd_profile_accept(args: argparse.Namespace) -> int:
+    """Turn a saved draft into `profiles/<name>.yaml` (C-26).
+
+    Exit 1 when it is not accepted, with every blocker listed: a refusal is an answer,
+    not a usage error. Guesses need `--accept-guesses`, because reading a draft and
+    agreeing to every line of it are different statements.
+    """
+    from jspec import profiler
+    from jspec.profiles import profiles_dir
+
+    directory = profiler.drafts_dir()
+    draft = profiler.load_draft(args.name, directory)
+    if draft is None:
+        raise ValueError(
+            f"no draft named {args.name!r} in {directory}; "
+            f"run `jspec profile draft <root> --name {args.name}` first"
+        )
+    result = profiler.accept(
+        draft,
+        profiles_directory=profiles_dir(),
+        drafts_directory=directory,
+        accept_guesses=args.accept_guesses,
+        overwrite=args.overwrite,
+    )
+    _emit(result)
+    return EXIT_OK if result["accepted"] else EXIT_ANSWER_IS_NO
+
+
 def cmd_tools(_: argparse.Namespace) -> int:
     _emit(tools.describe())
     return EXIT_OK
@@ -444,6 +553,58 @@ def build_parser() -> argparse.ArgumentParser:
     )
     blast.set_defaults(func=cmd_blast_radius)
 
+    profile = sub.add_parser(
+        "profile",
+        help="Draft a profile for a repository it has never seen, then accept it (C-26).",
+        description="Every drafted field says whether it was found, inferred or guessed.",
+    )
+    profile_sub = profile.add_subparsers(dest="profile_command", required=True)
+
+    draft = profile_sub.add_parser(
+        "draft",
+        help="Read a repository and draft its profile. Writes nothing into it.",
+        description="Detect languages, layout and validation commands, field by field.",
+    )
+    draft.add_argument("root", nargs="?", default=".", help="The repository to profile.")
+    draft.add_argument(
+        "--name",
+        default=None,
+        help="Profile id (3-16 characters). Default: derived from the folder name.",
+    )
+    draft.add_argument(
+        "--set",
+        action="append",
+        default=None,
+        metavar="FIELD=VALUE",
+        help="Correct a field. Lists are comma-separated. Marked confirmed, and kept "
+        "on every later draft. Repeatable.",
+    )
+    draft.add_argument(
+        "--use-index",
+        action="store_true",
+        help="Also report which folders the most others import, from the symbol index "
+        "if this root has been indexed. Never triggers indexing.",
+    )
+    draft.set_defaults(func=cmd_profile_draft)
+
+    accept = profile_sub.add_parser(
+        "accept",
+        help="Write a saved draft to profiles/<name>.yaml, if nothing blocks it.",
+        description="Refuses while a required field is unknown or a guess is unconfirmed.",
+    )
+    accept.add_argument("name", help="The draft's name, as printed by `profile draft`.")
+    accept.add_argument(
+        "--accept-guesses",
+        action="store_true",
+        help="Accept fields marked guessed as they stand (recorded as confirmed).",
+    )
+    accept.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Replace an existing profile of that name.",
+    )
+    accept.set_defaults(func=cmd_profile_accept)
+
     listing = sub.add_parser(
         "tools",
         help="All ten tools and what each is waiting on.",
@@ -462,7 +623,7 @@ def main(argv: list[str] | None = None) -> int:
     except tools.ToolUnavailable as exc:
         print(f"not built yet: {exc}", file=sys.stderr)
         return EXIT_NOT_BUILT
-    except ProfileError as exc:
+    except (ProfileError, ProfilerError) as exc:
         print(f"profile error: {exc}", file=sys.stderr)
         return EXIT_USAGE
     except (ExtractError, ConfigError, StoreError) as exc:

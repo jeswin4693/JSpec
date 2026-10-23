@@ -159,6 +159,39 @@ jobs:
               'ok', name['summary'])
           "
 
+      - name: The profiler drafts this repository and shows its working (C-26)
+        # A profiler that returns a confident-looking draft passes every shape test. So
+        # this drafts the one repository CI can see and checks the answer against what
+        # is known to be true - and that no field is a value without evidence, which is
+        # the property that separates a draft from a guess.
+        run: |
+          python core/scripts/jspec.py profile draft . --name ci-self > profile_draft.json
+          python -c "
+          import json, sys
+          draft = json.load(open('profile_draft.json'))
+          f = {x['field']: x for x in draft['findings']}
+          problems = []
+          if f['languages']['value'] != ['python']:
+              problems.append(f\"languages {f['languages']['value']}, expected ['python']\")
+          if f['source_dirs']['value'] != ['core/src/']:
+              problems.append(f\"source_dirs {f['source_dirs']['value']}, expected ['core/src/']\")
+          if f['test_dirs']['value'] != ['tests/'] or f['test_dirs']['basis'] != 'found':
+              problems.append('test_dirs should be found in pytest.ini')
+          if f['validation.test']['value'] != 'pytest':
+              problems.append(f\"validation.test {f['validation.test']['value']!r}\")
+          bare = [k for k, v in f.items() if v['basis'] != 'unknown' and not v['evidence']]
+          if bare:
+              problems.append(f'fields with a value and no evidence: {bare}')
+          if sum(draft['summary'].values()) != 9:
+              problems.append('the draft does not cover all nine fields')
+          sys.exit('; '.join(problems)) if problems else print('ok', draft['summary'])
+          "
+          git status --porcelain --untracked-files=no > tracked-changes.txt
+          if [ -s tracked-changes.txt ]; then
+            echo "profiling modified tracked files:"; cat tracked-changes.txt; exit 1
+          fi
+          echo "ok profiling left every tracked file alone"
+
   artifacts:
     # Config files are load-bearing: a malformed plugin manifest or template
     # registry fails at runtime, in someone's session, with a worse error message.

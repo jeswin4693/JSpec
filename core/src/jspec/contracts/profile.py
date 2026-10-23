@@ -26,7 +26,9 @@ Keep this module free of I/O and of model calls - loading lives in `jspec.profil
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from enum import Enum
+
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from jspec.contracts.base import Id
 
@@ -119,7 +121,155 @@ class Profile(BaseModel):
         return v
 
 
+# --- the draft a profiler writes, before a person has agreed to it (C-26) -----------
+
+
+class Basis(str, Enum):
+    """How a drafted value came to be. The whole point of a draft is that this is
+    never hidden: a reader who skims once will trust every line equally, so each line
+    has to say how far it can be trusted.
+
+      FOUND      read as written in a file of the repository
+      INFERRED   derived by a rule from evidence that was found - a convention
+                 applied to a real signal, not a lookup
+      GUESSED    a folder or file *name* and nothing else
+      CONFIRMED  a person said so. Detection never overwrites it
+      UNKNOWN    no evidence. Left empty on purpose, never filled with a plausible value
+    """
+
+    FOUND = "found"
+    INFERRED = "inferred"
+    GUESSED = "guessed"
+    CONFIRMED = "confirmed"
+    UNKNOWN = "unknown"
+
+
+REQUIRED_FIELDS = ("name", "description", "languages", "source_dirs", "validation.test")
+"""Without these there is no valid `Profile`, so an unknown one blocks acceptance."""
+
+OPTIONAL_FIELDS = (
+    "test_dirs",
+    "validation.lint",
+    "validation.format",
+    "validation.typecheck",
+)
+"""Absence is legal: a repo may have no linter, and a profile states what is true."""
+
+LIST_FIELDS = ("languages", "source_dirs", "test_dirs")
+
+
+class Finding(BaseModel):
+    """One field of the draft, with the reason it holds the value it holds."""
+
+    model_config = {"extra": "forbid"}
+
+    field: str
+    value: str | list[str] | None = None
+    basis: Basis
+    evidence: list[str] = Field(default_factory=list)
+    note: str | None = Field(
+        default=None, description="What a person should check, or why it is empty."
+    )
+
+    @model_validator(mode="after")
+    def _evidence_or_silence(self) -> Finding:
+        """Evidence or silence, as for every judgement in this system (rule 15).
+
+        A value with no evidence is an invention; an `unknown` with a value is a
+        contradiction. Either would let a draft look more certain than it is.
+        """
+        if self.basis is Basis.UNKNOWN:
+            if self.value not in (None, [], ""):
+                raise ValueError(f"{self.field}: basis unknown but a value is set")
+        elif not self.evidence:
+            raise ValueError(f"{self.field}: basis {self.basis.value} needs evidence")
+        return self
+
+
+class ProfileDraft(BaseModel):
+    """A profile as detected, field by field, awaiting a person's say.
+
+    Not a `Profile`: that contract requires a test command, and a draft for a
+    repository with none must be able to say so instead of inventing one.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    root: str = Field(min_length=1, description="Where it was drafted from. Local only.")
+    findings: list[Finding]
+    observations: list[str] = Field(
+        default_factory=list,
+        description="Facts worth seeing that no profile field can hold (yet).",
+    )
+
+    @model_validator(mode="after")
+    def _fields_are_known_and_unique(self) -> ProfileDraft:
+        known = {*REQUIRED_FIELDS, *OPTIONAL_FIELDS}
+        names = [f.field for f in self.findings]
+        unknown = sorted(set(names) - known)
+        duplicated = sorted({n for n in names if names.count(n) > 1})
+        missing = sorted(known - set(names))
+        problems = []
+        if unknown:
+            problems.append(f"unknown fields {unknown}")
+        if duplicated:
+            problems.append(f"duplicated fields {duplicated}")
+        if missing:
+            problems.append(f"missing fields {missing}")
+        if problems:
+            raise ValueError("; ".join(problems) + f"; expected exactly {sorted(known)}")
+        return self
+
+    def get(self, field: str) -> Finding:
+        return next(f for f in self.findings if f.field == field)
+
+    @property
+    def name(self) -> str:
+        value = self.get("name").value
+        return value if isinstance(value, str) else ""
+
+    def unknown_required(self) -> list[str]:
+        return [f for f in REQUIRED_FIELDS if self.get(f).basis is Basis.UNKNOWN]
+
+    def guessed(self) -> list[str]:
+        return [f.field for f in self.findings if f.basis is Basis.GUESSED]
+
+    def to_profile(self) -> Profile:
+        """The draft as a real `Profile`, or an error naming every field that stops it.
+
+        Raises `ValueError` rather than defaulting: a required field nobody knows
+        must reach a person, not a linter run against the wrong directory.
+        """
+        blocked = self.unknown_required()
+        if blocked:
+            raise ValueError(f"cannot build a profile: unknown required fields {blocked}")
+
+        def value(field: str) -> str | list[str] | None:
+            return self.get(field).value
+
+        validation: dict[str, object] = {"test": value("validation.test")}
+        for check in ("lint", "format", "typecheck"):
+            if value(f"validation.{check}"):
+                validation[check] = value(f"validation.{check}")
+        return Profile.model_validate(
+            {
+                "name": value("name"),
+                "description": value("description"),
+                "languages": value("languages"),
+                "source_dirs": value("source_dirs"),
+                "test_dirs": value("test_dirs") or [],
+                "validation": validation,
+            }
+        )
+
+
 __all__ = [
+    "LIST_FIELDS",
+    "OPTIONAL_FIELDS",
+    "REQUIRED_FIELDS",
+    "Basis",
+    "Finding",
     "Profile",
+    "ProfileDraft",
     "Validation",
 ]

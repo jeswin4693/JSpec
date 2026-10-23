@@ -18,21 +18,22 @@ D-027). Where an example is needed below it is labelled as an example.
 
 | | Count | Which |
 |---|---|---|
-| ✅ Done | **8** | C-01, C-02, C-03, C-04, C-05, C-06, C-07, C-25 |
+| ✅ Done | **10** | C-01, C-02, C-03, C-04, C-05, C-06, C-07, C-08, C-25, C-26 |
 | 🟡 Partial / stub | **3** | C-12, C-14, C-16 |
-| ⬜ Not started | **16** | everything else |
+| ⬜ Not started | **14** | everything else |
 | **Total** | **27** | 9 groups, 6 milestones |
 
-**Right now:** **M2 half done — C-07 landed 2026-09-16.** 204 tests green. JSpec now
-*remembers* what it parsed: the Made2Manage suite (1,885 files, 8,911 symbols, 199,615
-references) indexes in 10.9 s and **re-indexes in 1.9 s having parsed nothing**, and an
-exact symbol lookup against it costs 0.53 ms. Content hashes, never timestamps (D-037,
-D-038). `find_existing` is the fourth ready tool; `blast_radius` now waits on C-08, not
-C-07.
-**Next:** **C-08 blast radius** — transitive closure over the stored edges, cycle-safe,
-depth-limited with the depth reported, and it must split "certain" from "possible":
-**72% of the M2M graph is `name_only`**, so a bare number would be mostly guesswork.
-Then C-26, then stop and use M2.
+**Right now:** **M2 is complete — C-26 landed 2026-10-23, the same day as C-08.** 322
+tests green. `jspec blast-radius` answers "what breaks if I change this?" with every result
+**certain or possible** (D-039); `jspec profile draft` / `accept` drafts a profile for a
+repository it has never seen, every field marked `found`, `inferred`, `guessed`,
+`confirmed` or `unknown`, and never fills a gap with a plausible value (D-040). On this
+repository the draft gets languages, source dirs, test dirs and the test command right.
+**Next:** **stop and use M2 for two weeks** — that is the milestone's own instruction, and
+it is now due. Two open things to watch: is `possible` too noisy on common names (`click`:
+0 certain, 8,143 possible), and does the profiler hold up on a *real* external repository
+(only synthetic ones and this repo so far; needs the owner's go-ahead to read another).
+After the pause: **M3**, starting with C-09 (retriever) and C-11 (redactor).
 
 **Legend:** `[x]` done · `[~]` partial or stub · `[ ]` not started · `[!]` blocked on input
 
@@ -76,10 +77,15 @@ saying what changed. Never renumber a component ID — they are referenced from
       (python-service, playwright-e2e, jspec-self); 2 CI gates enforce it.
       · 258 ln + 21 tests · needs: C-01 · *teaches: where to put the generalization boundary*
 
-- [ ] **C-26 · Project profiler** — Point it at a repository it has never seen; it works
+- [x] **C-26 · Project profiler** — Point it at a repository it has never seen; it works
       out the languages, frameworks, test runner and layout, then writes a **draft**
-      profile the user corrects. Every guess marked as a guess.
-      · ~300 ln · needs: C-06, C-07, C-25 · *teaches: zero-config onboarding, honest uncertainty*
+      profile the user corrects. Every guess marked as a guess. Each field is found /
+      inferred / guessed / confirmed / unknown with evidence; the draft is its own
+      contract because a real `Profile` cannot hold an unknown test command; a person's
+      correction is `confirmed` and never overwritten; `accept` refuses unknown required
+      fields and unconfirmed guesses, and what it writes must load (D-040). **Not yet
+      proven on a real external repository; only root-level manifests are read.**
+      · ~885 ln + 66 tests · needs: C-06, C-07, C-25 · *teaches: zero-config onboarding, honest uncertainty*
 
 - [ ] **C-27 · Convention learner** — Infer how *this* team actually writes code — naming,
       structure, recurring patterns — so generated work looks like theirs, not generic.
@@ -115,10 +121,15 @@ saying what changed. Never renumber a component ID — they are referenced from
       repo twice and fails if the second run parses a single file.
       · 674 ln + 33 tests · needs: C-06 · *teaches: incremental indexing, content addressing*
 
-- [ ] **C-08 · Blast radius** — "Who calls this, and who calls them?" — the transitive
+- [x] **C-08 · Blast radius** — "Who calls this, and who calls them?" — the transitive
       closure over the call and import graph. Change a shared thing, get the complete
-      downstream list before touching it.
-      · ~200 ln · needs: C-07 · *teaches: deterministic grounding* · **first component that earns its keep**
+      downstream list before touching it. A name walks the call graph, a file the import
+      graph; both directions; breadth-first over `(node, tainted)` so every result is
+      **certain or possible**; the depth searched is always reported, and the ring past
+      the limit is peeked at so "cut short" is never guessed. An edge is certain only on
+      evidence, and every simplification errs toward possible (D-039). **Over estimate:**
+      ~810 lines against ~200 — the certainty model and the file graph were not in it.
+      · ~810 ln + 54 tests · needs: C-07 · *teaches: deterministic grounding* · **first component that earns its keep**
 
 ## Group 4 · Context — *this is the RAG layer*
 
@@ -214,7 +225,7 @@ saying what changed. Never renumber a component ID — they are referenced from
       a route, a chain and a budget; `jspec validate` rejects a malformed artifact and
       names every field. **2 components, both done.**
 
-- [ ] **M2 · It knows the repo — stop here and use it** — ~~`C-06`~~ → ~~`C-07`~~ → `C-08` → `C-26`
+- [x] **M2 · It knows the repo — stop here and use it** — ~~`C-06`~~ → ~~`C-07`~~ → ~~`C-08`~~ → ~~`C-26`~~ · **built 2026-10-23; the two-week use period starts now**
       Blast radius works. "What breaks if I change this?" answered completely, in
       milliseconds. **This alone is worth the project.** Use it for two weeks before
       building more — what you learn will change what you build next. **4 components.**
