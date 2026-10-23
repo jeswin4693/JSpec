@@ -32,6 +32,8 @@ languages:
   python:
     grammar: python
     extensions: [".py", ".pyi"]
+    # `import a.b` may mean the directory a/b, whose stand-in file is __init__.py.
+    entry_stems: ["__init__"]
     identifier_nodes: [identifier]
     # `user.save()` - the final name lives in the `attribute` field.
     member:
@@ -62,6 +64,7 @@ languages:
   typescript:
     grammar: typescript
     extensions: [".ts"]
+    entry_stems: ["index"]
     identifier_nodes: [identifier, property_identifier, type_identifier]
     member:
       nodes: [member_expression]
@@ -101,6 +104,7 @@ languages:
   tsx:
     grammar: tsx
     extensions: [".tsx"]
+    entry_stems: ["index"]
     identifier_nodes: [identifier, property_identifier, type_identifier]
     member:
       nodes: [member_expression]
@@ -134,6 +138,7 @@ languages:
   javascript:
     grammar: javascript
     extensions: [".js", ".jsx", ".mjs", ".cjs"]
+    entry_stems: ["index"]
     identifier_nodes: [identifier, property_identifier]
     member:
       nodes: [member_expression]

@@ -6,9 +6,8 @@ would leave "where is the code graph?" with three answers. The contracts themsel
 live in `jspec.contracts.graph`, alongside every other artifact contract, so nothing
 here defines a shape.
 
-C-06 is built. C-07 and C-08 are not: `jspec tools` names them as the blockers on
-`blast_radius` and `find_existing`, and they stay blocked rather than returning a
-plausible empty graph.
+All three are built. Traversal (`traverse.py`) answers over what the store holds and
+never re-reads source: an unindexed root is an error, not an empty graph.
 """
 
 from __future__ import annotations
@@ -23,11 +22,13 @@ from jspec.graph.extract import (
     spec_for,
     supported,
 )
+from jspec.graph.traverse import blast_radius
 
 __all__ = [
     "ExtractError",
     "ExtractReport",
     "LanguageSpec",
+    "blast_radius",
     "extract_file",
     "extract_source",
     "extract_tree",

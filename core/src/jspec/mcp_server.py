@@ -66,13 +66,23 @@ def validate_artifact(kind: str, payload: dict) -> dict[str, Any]:
 # --- analysis (deterministic - no model) -----------------------------------------
 
 
-def blast_radius(symbol: str, path: str | None = None) -> dict:
-    """Files and modules importing or calling `symbol`, via the symbol graph.
+def blast_radius(
+    target: str,
+    root: str = ".",
+    file: str | None = None,
+    direction: str = "dependents",
+    depth: int | None = None,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """What a change to a name or file affects, or what it relies on.
 
     This is a graph traversal, not an opinion. It is what makes the risk numbers
-    trustworthy enough to gate on (D-003).
+    trustworthy enough to gate on (D-003). Built by C-08: results are split into
+    `certain` and `possible`, and the depth searched is always reported.
     """
-    raise tools.unavailable("blast_radius")
+    return tools.blast_radius(
+        target, root=root, file=file, direction=direction, depth=depth, limit=limit
+    )
 
 
 def find_existing(

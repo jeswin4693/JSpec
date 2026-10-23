@@ -588,6 +588,48 @@ class SymbolStore:
         values.append(limit)
         return [dict(row) for row in self._conn.execute(sql, values)]
 
+    def references(
+        self,
+        name: str | None = None,
+        *,
+        kind: str | None = None,
+        file: str | None = None,
+        min_line: int | None = None,
+        max_line: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Edges by exact callee name, kind, or the file and line span they sit in.
+
+        The mirror of `lookup` for the other table, and the only query C-08 needs: by
+        `name` is "who names this" (answered by `refs_name`), by `file` with a line
+        span is "what does this definition use" (answered by `refs_file`).
+
+        No `limit`, unlike `lookup`: a traversal that silently stops reading edges
+        at row 50 would return a blast radius with callers missing and nothing to
+        say so. Callers that want fewer rows slice what they asked for.
+        """
+        clauses: list[str] = []
+        values: list[Any] = []
+        for column, value in (("name", name), ("kind", kind), ("file", file)):
+            if value is not None:
+                clauses.append(f"{column} = ?")
+                values.append(value)
+        if not clauses:
+            raise StoreError(
+                "references needs at least one of name, kind or file - "
+                "listing every edge is not a question"
+            )
+        if min_line is not None:
+            clauses.append("line >= ?")
+            values.append(min_line)
+        if max_line is not None:
+            clauses.append("line <= ?")
+            values.append(max_line)
+        sql = (
+            "SELECT name, kind, file, module, line, from_symbol, resolution, language "
+            f"FROM refs WHERE {' AND '.join(clauses)} ORDER BY file, line, id"
+        )
+        return [dict(row) for row in self._conn.execute(sql, values)]
+
     def search(self, text: str, *, limit: int = 50) -> list[dict[str, Any]]:
         """Full-text search over names, qualified names and paths.
 

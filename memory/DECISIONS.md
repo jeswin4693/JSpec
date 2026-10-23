@@ -710,3 +710,67 @@ Deferred with its reason recorded: a **stat-based pre-filter** (size + mtime as 
 a no-change re-index of 1,885 files costs 1.9–2.4 s, against the ~1 s the component guide
 asked for, and the floor is the walk plus a full read of every file. It is an
 optimisation with a correctness trap in it, so it waits until the cost is felt.
+
+## D-039 · 2026-10-23 · C-08 walks two graphs, and calls an edge certain only on evidence
+
+C-08 is `core/src/jspec/graph/traverse.py`. Seven choices, recorded so C-09 and C-16
+inherit them rather than re-derive them.
+
+**Two graphs, never merged.** A *name* is answered over the call graph (nodes are
+definitions); a *file* over the import graph (nodes are files). Merging them would make
+every importer of a module a caller of every function in it. Each walks both ways:
+`dependents` (who is affected) and `dependencies` (what it relies on).
+
+**Breadth-first over `(node, tainted)` states.** BFS because the first arrival at a node
+is the shortest chain, rings of distance mean something, and a depth limit on DFS is
+meaningless. `tainted` = "a possible edge is on the path so far", so one pass yields both
+sets: reached untainted is **certain**, reached only tainted is **possible**. A node
+reached both ways is certain and is shown with its *certain* chain and depth. A chain is
+as strong as its weakest link.
+
+**An edge is certain only on evidence, and every simplification errs toward possible.**
+Call: a bare name found in its own file, else in a file this file imports, exactly once.
+A member call is never certain. A bare name with neither is *possible even when the repo
+defines it once* — it may be a library function of the same name (a first draft called
+that certain; caught in review, and now pinned by a test). Import: a relative path that
+resolves to exactly one file, or a dotted/path name of two or more segments matching
+exactly one file's tail; one bare word is never certain (`os` would "certainly" mean any
+local `os.py`). Forward and reverse share one resolver, `_Graph.targets`, and a property
+test proves they agree.
+
+**Depth is reported, and the ring after the limit is peeked at.** `complete: false,
+stopped_by: "depth"` means something was actually cut; a search that ends exactly at the
+limit is not called truncated. `MAX_STATES = 20,000` is a second ceiling, reported as
+`stopped_by: "size"`. Default depth 4. Counts are always complete; `--limit` caps only the
+rows printed, and `omitted` says how many.
+
+**Ambiguity is searched, not refused.** A name defined several times searches every
+definition, lists them under `targets`, sets `ambiguous`, and each edge's certainty
+already accounts for it; `--file` narrows. A class target also seeds its methods —
+changing a class changes what they do.
+
+**Language facts stay in data.** Which file stands for an imported directory
+(`__init__`, `index`) is `entry_stems` in `languages.yaml` (D-033), so `core/` still names
+no language. `SymbolStore.references()` was added with no row limit by design: a walk that
+stops reading edges at row 50 returns a blast radius with callers missing and nothing to
+say so.
+
+**Every answer carries what it cannot see.** `limits` (calls and imports only — a
+function passed as a value, a decorator, an inheritance link or a type reference leaves no
+edge; a computed call has no name) and `index` (unresolved calls, parse failures) travel
+with the result so absence reads as "not seen", not "not there".
+
+**Measured, Made2Manage (2,932 files, 11,458 symbols, 263,837 refs).**
+`ensureAvaTaxEnabled`: 0.56 s end to end, 2 possible dependents, **exactly the two real
+call sites** (`…695270…spec.ts:301`, `…695265…spec.ts:226`) — the other eight text-search
+hits were comments and docs. `button` (177 definitions): 35 s, then 1.26 s after computing
+the member-call callers once per name instead of once per definition — counts identical.
+`click`: 0 certain, 8,143 possible, 2,599 files (every `page.click()` could be the repo's
+`click`). That last one is not a bug; it is `name_only` honestly reported, and the reason
+the split exists.
+
+**Deviation from the guide.** ~810 lines, not ~200. The file graph, import resolution
+and the certainty model were not in the guide's estimate; the model is the part that makes
+the answer trustworthy on a graph that is 72% `name_only`, and I judged it not optional.
+Deferred: narrowing a call by *which names* a file imports (only whether it imports the
+defining file at all) — it would turn some possibles into certains, never the reverse.

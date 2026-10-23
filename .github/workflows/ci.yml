@@ -130,6 +130,35 @@ jobs:
           fi
           echo "ok no tracked file was modified by indexing"
 
+      - name: Blast radius finds real callers and says how sure it is (C-08)
+        # A traversal that silently returns nothing passes every test that only checks
+        # shapes. `open_store` is called from cli.py, tools.py and the tests, so an empty
+        # answer here means the walk is broken. Also asserts the two things the answer
+        # exists to carry: the certain/possible split, and the depth it searched.
+        run: |
+          python core/scripts/jspec.py blast-radius open_store > blast_name.json
+          python core/scripts/jspec.py blast-radius core/src/jspec/graph/store.py > blast_file.json
+          python -c "
+          import json, sys
+          name = json.load(open('blast_name.json'))
+          file = json.load(open('blast_file.json'))
+          problems = []
+          if name['counts']['total'] < 3:
+              problems.append(f\"open_store has {name['counts']['total']} dependents, expected at least 3\")
+          if name['counts']['certain'] < 1:
+              problems.append('no dependent was certain: the resolver never links a call to its import')
+          if name['counts']['certain'] + name['counts']['possible'] != name['counts']['total']:
+              problems.append('certain + possible does not add up to the total')
+          if set(name['depth']) != {'limit', 'reached', 'complete', 'stopped_by'}:
+              problems.append(f\"depth block is incomplete: {name['depth']}\")
+          if not name['limits']:
+              problems.append('the answer carries no statement of what it cannot see')
+          if file['mode'] != 'file' or file['counts']['total'] < 1:
+              problems.append('the import graph found no importer of store.py')
+          sys.exit('; '.join(problems)) if problems else print(
+              'ok', name['summary'])
+          "
+
   artifacts:
     # Config files are load-bearing: a malformed plugin manifest or template
     # registry fails at runtime, in someone's session, with a worse error message.

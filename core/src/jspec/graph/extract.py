@@ -104,6 +104,9 @@ class LanguageSpec:
     definitions: dict[str, tuple[DefinitionRule, ...]]
     calls: dict[str, CallRule]
     imports: dict[str, tuple[ImportRule, ...]]
+    # File stems that stand for their directory when it is imported (C-08). Data, not
+    # a constant in the traversal, because which stem it is is a fact about a language.
+    entry_stems: frozenset[str] = frozenset()
 
 
 def _group(rules: list[Any]) -> dict[str, tuple[Any, ...]]:
@@ -162,6 +165,7 @@ def load_languages() -> dict[str, LanguageSpec]:
             definitions=_group(definitions),
             calls={c.node: c for c in calls},
             imports=_group(imports),
+            entry_stems=frozenset(body.get("entry_stems") or ()),
         )
     return specs
 

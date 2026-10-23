@@ -153,7 +153,6 @@ class TestUnbuiltToolsRefuse:
     @pytest.mark.parametrize(
         "name",
         [
-            "blast_radius",
             "score_risk",
             "record_gate",
             "record_preference",

@@ -4,15 +4,16 @@ A tool returns **ground truth, never an opinion**. The moment one starts returni
 judgement, a second model call is hidden behind an API and the audit trail is gone -
 which is the whole reason the deterministic half of this system exists (D-003).
 
-Ten tools are specified. Four are implemented here, because four are all that the
+Ten tools are specified. Five are implemented here, because five are all that the
 built components can answer honestly:
 
     classify_task     <- jspec.router          (C-02, built)
     plan_chain        <- jspec.router          (C-02, built)
     validate_artifact <- jspec.contracts.KINDS (C-01, built)
     find_existing     <- jspec.graph.store     (C-07, built)
+    blast_radius      <- jspec.graph.traverse  (C-08, built)
 
-The other six raise `ToolUnavailable` naming the component they wait on. That is a
+The other five raise `ToolUnavailable` naming the component they wait on. That is a
 deliberate choice over returning something plausible: a missing tool gets built, a
 lying tool gets trusted. Placeholder data here would flow into a risk score and out
 to a gate, and nothing downstream could tell it from a measurement.
@@ -82,15 +83,8 @@ REGISTRY: tuple[Tool, ...] = (
     ),
     Tool(
         "blast_radius",
-        "Files and modules importing or calling a symbol, via the symbol graph.",
-        blocked_by="C-08",
-        # Re-pointed when C-07 landed. The store answers one hop - "who names this?"
-        # - in 0.24ms on a 200k-edge index, but the transitive closure, the cycle
-        # guard and the reported depth limit are C-08's job, and a one-hop answer
-        # presented as a blast radius is exactly the partial-answer-shaped-like-a-
-        # complete-one this system refuses to give.
-        reason="the symbol store is built; traversal, cycle safety and depth "
-        "reporting arrive with C-08",
+        "What a change to a name or file affects, or what it relies on: certain and "
+        "possible kept apart, depth reported.",
     ),
     Tool(
         "find_existing",
@@ -312,12 +306,49 @@ def find_existing(
         }
 
 
+def blast_radius(
+    target: str,
+    *,
+    root: str = ".",
+    file: str | None = None,
+    direction: str = "dependents",
+    depth: int | None = None,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """What is affected if `target` changes - or what it relies on.
+
+    A fact from the graph, not an opinion (D-003). `target` is a definition name or an
+    indexed file path; `direction` is `dependents` (who is affected) or `dependencies`
+    (what it uses). Every result is `certain` or `possible`, the depth searched is
+    always reported, and a search cut short says so - see `jspec.graph.traverse`.
+
+    Like `find_existing`, an unindexed root raises rather than answering `[]`: "no
+    dependents" and "nothing was looked at" must never read the same.
+    """
+    from pathlib import Path
+
+    from jspec.graph.store import open_store
+    from jspec.graph.traverse import DEFAULT_DEPTH
+    from jspec.graph.traverse import blast_radius as _blast_radius
+
+    with open_store(Path(root), create=False) as store:
+        return _blast_radius(
+            store,
+            target,
+            file=file,
+            direction=direction,
+            depth=DEFAULT_DEPTH if depth is None else depth,
+            limit=limit,
+        )
+
+
 __all__ = [
     "BY_NAME",
     "REGISTRY",
     "ProfileError",
     "Tool",
     "ToolUnavailable",
+    "blast_radius",
     "classify_task",
     "describe",
     "find_existing",

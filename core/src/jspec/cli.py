@@ -123,9 +123,9 @@ def cmd_extract(args: argparse.Namespace) -> int:
     """Run C-06 over a tree and print what it found.
 
     Not one of the ten tools in `jspec.tools.REGISTRY`, and deliberately so: that
-    registry is the surface a *skill* may call, and the skill-facing graph tools
-    (`blast_radius`, `find_existing`) stay blocked until C-07 can resolve a name to
-    a definition. This command exists because C-06's acceptance criterion is that
+    registry is the surface a *skill* may call; the skill-facing graph tools
+    (`blast_radius`, `find_existing`) answer from the store, not from a fresh parse.
+    This command exists because C-06's acceptance criterion is that
     every symbol's file and line can be spot-checked by hand, and a component with
     no way to run it cannot be checked at all.
     """
@@ -225,6 +225,26 @@ def cmd_find(args: argparse.Namespace) -> int:
                 "rows": rows,
             }
         )
+    return EXIT_OK
+
+
+def cmd_blast_radius(args: argparse.Namespace) -> int:
+    """Who is affected if this changes, or what it relies on (C-08).
+
+    Answers from the index and never re-parses, so it is only as fresh as the last
+    `jspec index`. An unindexed root is an error that names the command, not an empty
+    result: "no dependents" and "nothing was looked at" must never read the same.
+    """
+    _emit(
+        tools.blast_radius(
+            args.target,
+            root=args.root,
+            file=args.file,
+            direction=args.direction,
+            depth=args.depth,
+            limit=args.limit,
+        )
+    )
     return EXIT_OK
 
 
@@ -378,6 +398,51 @@ def build_parser() -> argparse.ArgumentParser:
     find.add_argument("--module", default=None, help="Only symbols in this sub-folder.")
     find.add_argument("--limit", type=int, default=50, help="Maximum rows. Default 50.")
     find.set_defaults(func=cmd_find)
+
+    blast = sub.add_parser(
+        "blast-radius",
+        help="What a change to a name or file affects, or relies on (C-08).",
+        description="Walk the call graph (a name) or import graph (a file). Every "
+        "result is certain or possible; the depth searched is always reported.",
+    )
+    blast.add_argument(
+        "target",
+        help="A definition name, or an indexed file path (a unique tail is fine).",
+    )
+    blast.add_argument(
+        "root",
+        nargs="?",
+        default=".",
+        help="The indexed root, so the right store is opened.",
+    )
+    blast.add_argument(
+        "--direction",
+        choices=["dependents", "dependencies"],
+        default="dependents",
+        help="dependents: who is affected if this changes (default). "
+        "dependencies: what this relies on.",
+    )
+    blast.add_argument(
+        "--file",
+        default=None,
+        metavar="PATH",
+        help="Root-relative path, to pick one definition when a name is defined "
+        "in several places.",
+    )
+    blast.add_argument(
+        "--depth",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Rings to search. Default 4. The answer says if this limit stopped it.",
+    )
+    blast.add_argument(
+        "--limit",
+        type=int,
+        default=100,
+        help="Maximum rows printed; counts stay complete.",
+    )
+    blast.set_defaults(func=cmd_blast_radius)
 
     listing = sub.add_parser(
         "tools",
